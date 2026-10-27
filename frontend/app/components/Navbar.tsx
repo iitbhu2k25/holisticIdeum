@@ -87,7 +87,7 @@ const navItems: NavItem[] = [
   },
   { label: 'Holistic Module', href: '/holistic' },
 
-  { label: 'Dashboard', href: '/dashboard' },
+  // { label: 'Dashboard', href: '/dashboard' },
   { label: 'Contact us', href: '/contact' },
 ];
 
