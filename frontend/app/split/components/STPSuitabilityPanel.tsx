@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "../../shared/types";
 
-const STP_BACKEND   = "http://localhost:7100/api/stp_operation";
+const STP_BACKEND   = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:9000"}/api/stp_operation`;
 const GEOSERVER_URL = process.env.NEXT_PUBLIC_GEOSERVER_URL ?? "http://localhost:9090/geoserver";
 
 const TECH_OPTIONS = [

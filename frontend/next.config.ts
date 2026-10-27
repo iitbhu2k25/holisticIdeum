@@ -30,6 +30,9 @@
 
 import type { NextConfig } from "next"
 
+// Server-side target for rewrites; inside Docker this is the backend service name.
+const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:9000"
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -47,11 +50,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/assi/:path*/",
-        destination: "http://localhost:9000/assi/:path*/",
+        destination: `${BACKEND_INTERNAL_URL}/assi/:path*/`,
       },
       {
         source: "/assi/:path*",
-        destination: "http://localhost:9000/assi/:path*",
+        destination: `${BACKEND_INTERNAL_URL}/assi/:path*`,
       },
     ]
   },

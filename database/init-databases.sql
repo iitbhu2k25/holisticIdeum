@@ -1,3 +1,1 @@
 CREATE DATABASE slcr;
-CREATE DATABASE holisticdb;
-CREATE DATABASE slcr_cloud;
