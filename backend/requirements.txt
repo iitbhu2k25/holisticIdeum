@@ -117,7 +117,7 @@ contextily
 pyjwt[crypto]
 redis[hiredis]
 aiosmtplib
-fastapi-mail
+fastapi-mail==1.4.2
 pyotp
 datashader
 reportlab
