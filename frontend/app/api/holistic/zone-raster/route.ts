@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import tunnel from "@/tunnel.json";
 
 const BACKEND_BASE =
-  process.env.NEXT_ENV_BACKEND_URL || process.env.NEXT_ENV_DJANGO_URL || process.env.NEXT_ENV_FAST_API || "http://localhost:8000";
+  process.env.NEXT_ENV_BACKEND_URL ||
+  process.env.NEXT_ENV_DJANGO_URL ||
+  process.env.NEXT_ENV_FAST_API ||
+  tunnel.API_URL ||
+  "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {

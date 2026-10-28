@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import tunnel from "@/tunnel.json";
 
-const geoserverBase = process.env.NEXT_ENV_GEOSERVER || "http://localhost:9090/geoserver";
+const geoserverBase =
+  process.env.NEXT_ENV_GEOSERVER ||
+  (tunnel.GEOSERVER_URL ? `${tunnel.GEOSERVER_URL}/geoserver` : "http://localhost:9090/geoserver");
 const workspace = process.env.NEXT_ENV_GEOSERVER_WORKSAPACE || "dss_vector";
 const BACKEND_BASE =
-  process.env.NEXT_ENV_BACKEND_URL || process.env.NEXT_ENV_DJANGO_URL || process.env.NEXT_ENV_FAST_API || "http://localhost:8000";
+  process.env.NEXT_ENV_BACKEND_URL ||
+  process.env.NEXT_ENV_DJANGO_URL ||
+  process.env.NEXT_ENV_FAST_API ||
+  tunnel.API_URL ||
+  "http://localhost:8000";
 
 const escapeCqlString = (value: string) => value.replace(/'/g, "''");
 

@@ -13,7 +13,7 @@ import SessionHistory from "../../shared/components/SessionHistory";
 import DatasetCatalog, { ClipEntry, useDatasets } from "../../shared/components/DatasetCatalog";
 import MapLayersPanel from "../../shared/components/MapLayersPanel";
 import UserMenu from "../../components/UserMenu";
-import { categoryForStage } from "../../shared/config";
+import { categoryForStage, BACKEND_URL } from "../../shared/config";
 import { savePhaseRaster } from "../../shared/phaseRasterClient";
 import type { Dataset } from "../../shared/services/datasetService";
 import type { DrawnShape } from "../../shared/map/DrawLayer";
@@ -191,7 +191,7 @@ function emptySnapshot(): StageSnapshot {
 }
 
 export default function HolisticModule({ hideLeftPanel = false }: HolisticModuleProps) {
-  const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
+  const backendBase = BACKEND_URL;
   const {
     loading,
     error,

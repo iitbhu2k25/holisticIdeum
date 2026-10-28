@@ -1,6 +1,9 @@
 import { FeatureCollection } from "../types";
+import tunnel from "@/tunnel.json";
 
-const GEOSERVER_BASE = process.env.NEXT_ENV_GEOSERVER || "http://localhost:9090/geoserver";
+const GEOSERVER_BASE =
+  process.env.NEXT_ENV_GEOSERVER ||
+  (tunnel.GEOSERVER_URL ? `${tunnel.GEOSERVER_URL}/geoserver` : "http://localhost:9090/geoserver");
 const WORKSPACE = process.env.NEXT_ENV_GEOSERVER_WORKSAPACE || "dss_vector";
 
 const escapeCql = (value: string) => value.replace(/'/g, "''");

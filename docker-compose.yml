@@ -78,7 +78,7 @@ services:
     environment:
       ENABLE_CORS: "true"
       CORS_ENABLED: "true"
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://*.slcrdss.in,https://*.slcrdss.xyz
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://*.slcrdss.in,https://*.slcrdss.xyz,https://*.trycloudflare.com
       CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,HEAD,OPTIONS
       CORS_ALLOWED_HEADERS: "*"
       TOMCAT_EXTRAS: "true"
@@ -88,6 +88,39 @@ services:
       GEOSERVER_DATA_DIR: /opt/geoserver/data_dir
     restart: always
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml --url http://backend:8000
+    configs:
+      - source: cloudflared
+        target: /etc/cloudflared/config.yml
+    depends_on:
+      - backend
+      - geoserver
+    restart: always
+
+  # Writes the current quick-tunnel URL to frontend/tunnel.json
+  # (and when GITHUB_TOKEN is set in environment, commits & pushes it).
+  tunnel_url:
+    image: docker:27-cli
+    entrypoint: ["sh", "-c", "command -v git >/dev/null || timeout 60 apk add --no-cache -q git; exec sh /repo/update-tunnel-url.sh"]
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LOG_OWNER: ${LOG_OWNER:-1000:1000}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - .:/repo
+    depends_on:
+      - cloudflared
+    restart: always
+
+configs:
+  cloudflared:
+    content: |
+      ingress:
+        - path: ^/geoserver(/.*)?$$
+          service: http://geoserver:8080
+        - service: http://backend:8000
 
 volumes:
   postgres_data:

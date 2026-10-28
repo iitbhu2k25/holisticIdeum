@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { savePhaseRaster } from "../../shared/phaseRasterClient";
+import { BACKEND_URL, GEOSERVER_URL } from "../../shared/config";
 import {
   CartesianGrid, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -9,8 +10,8 @@ import {
 
 const ZONE_PALETTE = ["#2563eb","#059669","#dc2626","#d97706","#7c3aed","#db2777","#0284c7","#0f766e"];
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
-const GEOSERVER = "http://localhost:9090/geoserver/dss_raster/wms";
+const BACKEND = BACKEND_URL;
+const GEOSERVER = `${GEOSERVER_URL}/dss_raster/wms`;
 
 /* ─── Tiny helpers ─────────────────────────────────────────────────────── */
 function T({ children }: { children: React.ReactNode }) {

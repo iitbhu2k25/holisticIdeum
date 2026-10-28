@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "../../shared/types";
 import { zoneLabels } from "../../shared/drawnArea";
+import { BACKEND_URL, GEOSERVER_URL as CONFIG_GEOSERVER_URL } from "../../shared/config";
 
-const STP_BACKEND   = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:9000"}/api/stp_operation`;
-const GEOSERVER_URL = process.env.NEXT_PUBLIC_GEOSERVER_URL ?? "http://localhost:9090/geoserver";
+const STP_BACKEND   = `${BACKEND_URL}/api/stp_operation`;
+const GEOSERVER_URL = CONFIG_GEOSERVER_URL;
 
 const TECH_OPTIONS = [
   { label: "Trickling Filter",         land: 0.25 },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPhaseMeta, loadPhaseTiff } from "../../shared/phaseRasterClient";
+import { BACKEND_URL } from "../../shared/config";
 import type { BasemapType, StickyNote } from "../../shared/types";
 
 type CombinedMeta = { stage_name: string; criteria: string[]; weights: Record<string, number>; generated_at: number } | null;
@@ -201,7 +202,7 @@ export default function SplitMasterPanel({
   ] as const;
 
   const COMBINED_LABEL = "Combined Output";
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
+  const BACKEND = BACKEND_URL;
 
   const [combinedMeta, setCombinedMeta] = useState<CombinedMeta>(null);
   const [nirmalCombinedMeta, setNirmalCombinedMeta] = useState<CombinedMeta>(null);

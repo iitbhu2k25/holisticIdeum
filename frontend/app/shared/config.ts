@@ -1,6 +1,12 @@
+import tunnel from "@/tunnel.json";
+
 // Browser-visible service URLs. Set NEXT_PUBLIC_* in .env.local for other deployments.
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
-export const GEOSERVER_URL = process.env.NEXT_PUBLIC_GEOSERVER_URL || "http://localhost:9090/geoserver";
+// Falls back to active Cloudflare tunnel URL if present in tunnel.json.
+export const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || tunnel.API_URL || "http://localhost:9000";
+export const GEOSERVER_URL =
+  process.env.NEXT_PUBLIC_GEOSERVER_URL ||
+  (tunnel.GEOSERVER_URL ? `${tunnel.GEOSERVER_URL}/geoserver` : "http://localhost:9090/geoserver");
 
 // Workspace the backend publishes uploaded datasets into (backend/app/api/service/datasets/geoserver_publish.py)
 export const UPLOADS_WORKSPACE = "dss_uploads";

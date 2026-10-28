@@ -17,7 +17,7 @@ import type { Dataset } from "../shared/services/datasetService";
 import type { DrawMode, DrawnShape } from "../shared/map/DrawLayer";
 import type { MapControls } from "../shared/map/MapShell";
 import { withDrawnArea } from "../shared/drawnArea";
-import { DATASET_CATEGORIES } from "../shared/config";
+import { DATASET_CATEGORIES, BACKEND_URL } from "../shared/config";
 
 const AdminMap = dynamic(
   () => import("../shared/map/AdminMap"),
@@ -86,7 +86,7 @@ const getZoneName = (feature: any) => {
 };
 
 export default function SplitModule() {
-  const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
+  const backendBase = BACKEND_URL;
   const { areaGeojson, riversGeojson, basinGeojson } = useLocationSelection();
 
   const [layerState, setLayerState] = useState({ basin: true, rivers: true, area: true });
