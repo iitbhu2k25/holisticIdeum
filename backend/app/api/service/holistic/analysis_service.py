@@ -461,10 +461,35 @@ class Analysis_service:
 
         if data_type == "rainfall":
             coverage_name = coverage_candidates[0]
+            clipped_tiff = clip_coverage_tiff_to_geometries(coverage_name, zone_geometries)
         else:
-            # Resolve first valid coverage name, then clip.
-            coverage_name, _ = fetch_first_available_coverage_tiff(coverage_candidates, bounds_from_zone_geometries(zone_geometries))
-        clipped_tiff = clip_coverage_tiff_to_geometries(coverage_name, zone_geometries)
+            try:
+                # Resolve first valid coverage name, then clip.
+                coverage_name, _ = fetch_first_available_coverage_tiff(coverage_candidates, bounds_from_zone_geometries(zone_geometries))
+                clipped_tiff = clip_coverage_tiff_to_geometries(coverage_name, zone_geometries)
+            except Exception as geo_exc:
+                local_candidates: list[Path] = []
+                if data_type == "slope":
+                    local_candidates = [
+                        MEDIA_DIR / "files" / "aviral" / "slope" / "Slope_aviral.tif",
+                        MEDIA_DIR / "Rajat_data" / "shape_stp" / "Stp_sutability_raster" / "Operation" / "condition" / "Slope.tif",
+                    ]
+                elif data_type == "dem":
+                    local_candidates = [
+                        MEDIA_DIR / "Rajat_data" / "shape_stp" / "stp_area_elivation.tif",
+                    ]
+
+                clipped_tiff = None
+                for lp in local_candidates:
+                    if lp.exists():
+                        try:
+                            clipped_tiff = clip_local_tif_to_zones(lp, zone_geometries)
+                            coverage_name = f"local:{lp.name}"
+                            break
+                        except Exception:
+                            continue
+                if clipped_tiff is None:
+                    raise geo_exc
 
         filename = f"rainfall_{year_int}_clipped.tif" if year_int is not None else f"{data_type}_clipped.tif"
         return TiffFile(clipped_tiff, filename, {
@@ -550,6 +575,7 @@ class Analysis_service:
             aviral / "slope" / "slope_aviral.tif",
         ])
         dem_result, dem_errors = stats_for(DEM_COVERAGES, [
+            MEDIA_DIR / "Rajat_data" / "shape_stp" / "stp_area_elivation.tif",
             aviral / "dem" / "DEM_aviral.tif",
             aviral / "dem" / "dem_aviral.tif",
             aviral / "DEM" / "DEM_aviral.tif",

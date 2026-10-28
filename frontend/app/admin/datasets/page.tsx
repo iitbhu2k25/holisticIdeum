@@ -95,7 +95,11 @@ export default function DatasetAdminPage() {
       state: file.size > MAX_BYTES ? "error" : "waiting",
       message: file.size > MAX_BYTES ? "Larger than the 1 GB limit" : undefined,
     }));
-    setQueue((prev) => [...prev.filter((p) => p.state === "uploading" || p.state === "waiting"), ...items.filter((i) => !prev.some((p) => p.key === i.key))]);
+    // finished rows are dropped, so choosing the same file again re-queues it (and shows the duplicate notice)
+    setQueue((prev) => {
+      const pending = prev.filter((p) => p.state === "uploading" || p.state === "waiting");
+      return [...pending, ...items.filter((i) => !pending.some((p) => p.key === i.key))];
+    });
   };
 
   const patch = (key: string, change: Partial<QueueItem>) =>

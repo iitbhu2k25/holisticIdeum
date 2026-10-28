@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { StickyNote } from "../types";
 import { apiFetch } from "../auth/authClient";
 import { useAuth } from "../auth/useAuth";
@@ -241,7 +242,8 @@ function SessionHistoryPanel({ label, buttonClassName }: { label: string; button
         <span className="rounded-full bg-black/10 px-1.5 text-[10px] opacity-80">{sessions.length}</span>
       </button>
 
-      {open && (
+      {/* portalled: an ancestor with a CSS transform (the draggable Split master panel) would trap position:fixed */}
+      {open && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}>
           {/* Backdrop */}
           <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.45)" }} onClick={() => { setOpen(false); setSelected(null); }} />
@@ -454,7 +456,7 @@ function SessionHistoryPanel({ label, buttonClassName }: { label: string; button
             )}
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }
