@@ -514,19 +514,25 @@ export default function SplitMasterPanel({
 
           {/* ── Zone selector ── */}
           <div className="w-full" ref={zoneDropdownRef}>
-            <p className="mb-1 text-right text-[10px] font-semibold uppercase tracking-widest text-blue-400/70">Zone</p>
+            <p className="mb-1 text-right text-[10px] font-semibold uppercase tracking-widest text-blue-400/70">Step 1 · Choose Zone</p>
             {/* Dropdown trigger */}
             <button
               type="button"
               onClick={() => setShowZoneDropdown((p) => !p)}
+              title="Click to pick one or more zones"
               style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(96,165,250,0.35)",
-                borderRadius: 7, padding: "4px 8px", fontSize: 10, color: "#cbd5e1", cursor: "pointer",
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
+                background: showZoneDropdown ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.07)",
+                border: `1px solid ${selectedZones.length > 0 || hasDrawnArea ? "rgba(96,165,250,0.6)" : "rgba(251,191,36,0.6)"}`,
+                borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 600, color: "#e2e8f0", cursor: "pointer",
               }}
             >
-              <span>{selectedZones.length > 0 ? `${selectedZones.length} zone${selectedZones.length > 1 ? "s" : ""} selected${hasDrawnArea ? " + drawn area" : ""}` : hasDrawnArea ? "Drawn area (add zones to narrow)" : "Select zones"}</span>
-              <span style={{ fontSize: 8, opacity: 0.7 }}>{showZoneDropdown ? "▲" : "▼"}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selectedZones.length > 0
+                  ? `Zones: ${selectedZones.length === zones.length ? "All" : selectedZones.join(", ")}${hasDrawnArea ? " + drawn area" : ""}`
+                  : hasDrawnArea ? "Drawn area (add zones to narrow)" : "Click to select zones"}
+              </span>
+              <span style={{ fontSize: 10, color: "#93c5fd", flexShrink: 0 }}>{showZoneDropdown ? "▲" : "▼"}</span>
             </button>
 
             {/* Dropdown list */}
@@ -536,15 +542,27 @@ export default function SplitMasterPanel({
                 borderRadius: 7, overflow: "hidden",
               }}>
                 {/* Select all row */}
-                <label style={{ display: "flex", alignItems: "center", gap: 5, padding: "2px 8px", borderBottom: "1px solid rgba(96,165,250,0.15)", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={allZonesSelected}
-                    onChange={() => allZonesSelected ? onClearZones?.() : onSelectAllZones?.()}
-                    style={{ accentColor: "#60a5fa", width: 10, height: 10 }}
-                  />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: "#93c5fd" }}>Select all</span>
-                </label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", borderBottom: "1px solid rgba(96,165,250,0.15)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={allZonesSelected}
+                      onChange={() => allZonesSelected ? onClearZones?.() : onSelectAllZones?.()}
+                      style={{ accentColor: "#60a5fa", width: 12, height: 12 }}
+                    />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#93c5fd" }}>Select all</span>
+                  </label>
+                  {selectedZones.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onClearZones?.()}
+                      style={{ fontSize: 9, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p style={{ margin: 0, padding: "3px 8px 0", fontSize: 9, color: "#94a3b8" }}>Tap a zone to select / unselect</p>
                 {/* Horizontal zone chips */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "4px 8px" }}>
                   {zones.map((zone) => {
@@ -555,16 +573,16 @@ export default function SplitMasterPanel({
                         type="button"
                         onClick={() => onZoneToggle?.(zone)}
                         style={{
-                          width: 28, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
+                          minWidth: 30, height: 22, padding: "0 5px", display: "flex", alignItems: "center", justifyContent: "center", gap: 2,
                           borderRadius: 6, fontSize: 10, fontWeight: 600, flexShrink: 0,
                           cursor: "pointer", border: "1px solid",
-                          borderColor: checked ? "rgba(96,165,250,0.6)" : "rgba(148,163,184,0.25)",
-                          background: checked ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.05)",
-                          color: checked ? "#93c5fd" : "#94a3b8",
+                          borderColor: checked ? "rgba(96,165,250,0.9)" : "rgba(148,163,184,0.25)",
+                          background: checked ? "rgba(59,130,246,0.45)" : "rgba(255,255,255,0.05)",
+                          color: checked ? "#fff" : "#94a3b8",
                           transition: "all 0.15s",
                         }}
                       >
-                        {zone}
+                        {checked ? "✓ " : ""}{zone}
                       </button>
                     );
                   })}
@@ -1019,19 +1037,18 @@ export default function SplitMasterPanel({
             </button>
           </div>
           {showBasemapOptions ? (
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               {basemapOptions.map((opt) => (
                 <button
                   key={opt.key}
                   type="button"
                   onClick={() => onBasemapChange(opt.key)}
-                  className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 ${
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-all duration-200 ${
                     basemap === opt.key
-                      ? "bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40 shadow-lg shadow-blue-500/10"
+                      ? "bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40"
                       : "bg-white/5 text-slate-400 ring-1 ring-white/5 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span className="text-base">{opt.icon}</span>
                   {opt.label}
                 </button>
               ))}
