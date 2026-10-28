@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { StickyNote } from "../../../shared/types";
+import type { StickyNote } from "../types";
+import { apiFetch } from "../auth/authClient";
+import { useAuth } from "../auth/useAuth";
 
 export type SplitMark = {
   id: string;
@@ -29,9 +31,20 @@ export type SplitSession = {
   stickyNotes: StickyNote[];
 };
 
-const SESSIONS_KEY = "split_sessions";
-const RESTORE_SESSION_KEY = "split_restore_session";
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
+/** Row from GET /sessions/list — counts only, the full state is fetched when a session is opened. */
+export type SessionSummary = {
+  sessionId: string;
+  title: string | null;
+  updatedAt: number;
+  startedAt: number;
+  lastActivityAt: number;
+  zones: string[];
+  criteria: string[];
+  activeModule?: string;
+  hasPolygon?: boolean;
+  marks: number;
+  stickyNotes: number;
+};
 
 const SIDE_ACCENT: Record<string, string> = {
   main: "#6366f1", top: "#d97706", topSecondary: "#e11d48",
@@ -153,107 +166,79 @@ function exportPDF(s: SplitSession) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function SplitActivityPanel() {
-  const [sessions, setSessions] = useState<SplitSession[]>([]);
+/** Signed-in users' saved Split sessions; renders nothing for anonymous visitors. */
+const DEFAULT_BUTTON =
+  "inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50";
+
+export default function SessionHistory({ label = "History", buttonClassName = DEFAULT_BUTTON }: { label?: string; buttonClassName?: string }) {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <SessionHistoryPanel label={label} buttonClassName={buttonClassName} />;
+}
+
+function SessionHistoryPanel({ label, buttonClassName }: { label: string; buttonClassName: string }) {
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<SplitSession | null>(null);
-  const [lastSeen, setLastSeen] = useState<number>(() => {
-    try { return parseInt(localStorage.getItem("split_notif_lastseen") ?? "0", 10); } catch { return 0; }
-  });
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const load = () => {
-      // Try backend first, fall back to localStorage
-      fetch(`${BACKEND_BASE}/sessions/list`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((d) => {
-          if (d?.sessions?.length) {
-            setSessions(d.sessions);
-          } else {
-            // fallback to localStorage
-            try {
-              const raw = localStorage.getItem(SESSIONS_KEY);
-              if (raw) setSessions(JSON.parse(raw));
-            } catch { /* ignore */ }
-          }
-        })
-        .catch(() => {
-          try {
-            const raw = localStorage.getItem(SESSIONS_KEY);
-            if (raw) setSessions(JSON.parse(raw));
-          } catch { /* ignore */ }
-        });
-    };
-    load();
-    window.addEventListener("storage", load);
-    return () => window.removeEventListener("storage", load);
-  }, []);
-
-  const unseen = sessions.filter((s) => s.lastActivityAt > lastSeen).length;
-
-  const handleOpen = () => {
-    const now = Date.now();
-    setOpen(true);
-    setLastSeen(now);
-    try { localStorage.setItem("split_notif_lastseen", String(now)); } catch { /* ignore */ }
+  const load = () => {
+    apiFetch("/sessions/list")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Could not load history (${r.status})`))))
+      .then((d) => { setSessions(d.sessions ?? []); setError(""); })
+      .catch((e) => setError(e.message));
   };
 
-  const handleDeleteSession = (sessionId: string) => {
-    const next = sessions.filter((s) => s.sessionId !== sessionId);
-    setSessions(next);
-    // Delete from backend
-    fetch(`${BACKEND_BASE}/sessions/delete/${encodeURIComponent(sessionId)}`, { method: "DELETE" }).catch(() => {});
-    // Also remove from localStorage cache
-    try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  useEffect(load, []);
+
+  const handleOpen = () => {
+    setOpen(true);
+    load();
+  };
+
+  const selectSession = async (s: SessionSummary) => {
+    if (selected?.sessionId === s.sessionId) return setSelected(null);
+    setLoadingId(s.sessionId);
+    try {
+      const r = await apiFetch(`/sessions/${encodeURIComponent(s.sessionId)}`);
+      if (!r.ok) throw new Error(`Could not open session (${r.status})`);
+      const full = await r.json();
+      setSelected({ marks: [], zones: [], activeZones: [], criteria: [], activeCriteria: [], stickyNotes: [], basemap: "terrain", ...full });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open session");
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm("Delete this saved session?")) return;
+    await apiFetch(`/sessions/delete/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+    setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
     if (selected?.sessionId === sessionId) setSelected(null);
   };
 
-  const handleGoToSession = (s: SplitSession) => {
-    localStorage.setItem(RESTORE_SESSION_KEY, JSON.stringify(s));
-    window.location.href = "/split";
+  const handleGoToSession = (s: { sessionId: string }) => {
+    window.location.href = `/split?session=${encodeURIComponent(s.sessionId)}`;
   };
 
   const panelW = selected ? Math.min(820, typeof window !== "undefined" ? window.innerWidth : 820) : 380;
 
   return (
     <>
-      {/* Bell button with label — styled for light white header */}
-      <button type="button" onClick={handleOpen}
-        style={{
-          display: "flex", alignItems: "center", gap: 7,
-          background: unseen > 0 ? "#eff6ff" : "#f8fafc",
-          border: `1.5px solid ${unseen > 0 ? "#93c5fd" : "#e2e8f0"}`,
-          borderRadius: 22, padding: "6px 13px 6px 9px",
-          cursor: "pointer", flexShrink: 0,
-          transition: "all 0.2s",
-        }}
-        title="Split screen activity"
+      <button
+        type="button"
+        onClick={handleOpen}
+        title="Your saved Split sessions"
+        className={buttonClassName}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={unseen > 0 ? "#2563eb" : "#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 3" />
         </svg>
-        <span style={{ fontSize: 12, fontWeight: 700, color: unseen > 0 ? "#1d4ed8" : "#475569", letterSpacing: "0.01em" }}>
-          Notifications
-        </span>
-        {unseen > 0 ? (
-          <span style={{
-            background: "#ef4444", color: "#fff", borderRadius: 10,
-            minWidth: 18, height: 18, fontSize: 10, fontWeight: 800,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
-          }}>
-            {unseen > 9 ? "9+" : unseen}
-          </span>
-        ) : (
-          <span style={{
-            background: "#e2e8f0", color: "#94a3b8", borderRadius: 10,
-            minWidth: 18, height: 18, fontSize: 10, fontWeight: 700,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
-          }}>
-            {sessions.length}
-          </span>
-        )}
+        {label}
+        <span className="rounded-full bg-black/10 px-1.5 text-[10px] opacity-80">{sessions.length}</span>
       </button>
 
       {open && (
@@ -269,8 +254,8 @@ export default function SplitActivityPanel() {
               {/* Header */}
               <div style={{ padding: "16px 16px 12px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>Ideum Sessions</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>{sessions.length} session{sessions.length !== 1 ? "s" : ""} recorded</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>Session history</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>{sessions.length} saved session{sessions.length !== 1 ? "s" : ""} · click one, then Open to continue</p>{error ? <p style={{ margin: "4px 0 0", fontSize: 11, color: "#dc2626" }}>{error}</p> : null}
                 </div>
                 <button type="button" onClick={() => { setOpen(false); setSelected(null); }}
                   style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#64748b", borderRadius: 6, width: 28, height: 28, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
@@ -291,14 +276,14 @@ export default function SplitActivityPanel() {
                     <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Place marks or select zones on the Split screen to record activity.</p>
                   </div>
                 ) : (
-                  [...sessions].reverse().map((s) => {
+                  sessions.map((s) => {
                     const isActive = selected?.sessionId === s.sessionId;
-                    const hasActivity = s.marks.length > 0 || s.zones.length > 0 || s.criteria.length > 0;
+                    const hasActivity = s.marks > 0 || s.zones.length > 0 || s.criteria.length > 0;
                     return (
                       <div key={s.sessionId}
                         style={{ borderBottom: "1px solid #f1f5f9", background: isActive ? "#eff6ff" : "#fff", borderLeft: `3px solid ${isActive ? "#2563eb" : "transparent"}`, transition: "background 0.1s" }}
                       >
-                        <button type="button" onClick={() => setSelected(isActive ? null : s)}
+                        <button type="button" onClick={() => selectSession(s)}
                           style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "12px 14px", cursor: "pointer", display: "flex", gap: 11, alignItems: "flex-start" }}
                         >
                           {/* Icon */}
@@ -309,16 +294,16 @@ export default function SplitActivityPanel() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{fmt(s.startedAt)}</span>
-                              <span style={{ fontSize: 10, color: "#94a3b8" }}>{timeAgo(s.startedAt)}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{s.title || fmt(s.startedAt)}</span>
+                              <span style={{ fontSize: 10, color: "#94a3b8" }}>{loadingId === s.sessionId ? "opening…" : timeAgo(s.updatedAt)}</span>
                             </div>
                             <p style={{ margin: "3px 0 0", fontSize: 11, color: "#475569" }}>
-                              <span style={{ fontWeight: 600, color: "#2563eb" }}>{s.marks.length}</span> mark{s.marks.length !== 1 ? "s" : ""}
+                              <span style={{ fontWeight: 600, color: "#2563eb" }}>{s.marks}</span> mark{s.marks !== 1 ? "s" : ""}
                               {s.zones.length > 0 ? <> · <span style={{ fontWeight: 600, color: "#16a34a" }}>{s.zones.length}</span> zone{s.zones.length !== 1 ? "s" : ""}</> : ""}
                               {s.criteria.length > 0 ? <> · <span style={{ fontWeight: 600, color: "#d97706" }}>{s.criteria.length}</span> criteria</> : ""}
                             </p>
                             <p style={{ margin: "2px 0 0", fontSize: 10, color: "#94a3b8" }}>
-                              {duration(s.startedAt, s.lastActivityAt)} · {s.basemap}
+                              {duration(s.startedAt, s.lastActivityAt)}{s.activeModule ? ` · ${s.activeModule}` : ""}{s.hasPolygon ? " · drawn area" : ""}
                             </p>
                           </div>
                         </button>

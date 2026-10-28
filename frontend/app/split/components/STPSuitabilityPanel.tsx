@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "../../shared/types";
+import { zoneLabels } from "../../shared/drawnArea";
 
 const STP_BACKEND   = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:9000"}/api/stp_operation`;
 const GEOSERVER_URL = process.env.NEXT_PUBLIC_GEOSERVER_URL ?? "http://localhost:9090/geoserver";
@@ -265,7 +266,8 @@ export default function STPSuitabilityPanel({
           treatment_technology: areaInputs.techFactor,
           custom_land_per_mld:  2.0,
           layer_name:           result.layer_name,
-          place:                selectedZones[0],
+          // zones + drawn area; the backend uses their overlap
+          place:                selectedZones.join(","),
         }),
       });
       if (!resp.ok) {
@@ -335,7 +337,7 @@ export default function STPSuitabilityPanel({
           </div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-            {selectedZones.map(z => (
+            {zoneLabels(selectedZones).map(z => (
               <span key={z} style={{ fontSize: 7, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" }}>{z}</span>
             ))}
           </div>
@@ -593,7 +595,7 @@ export default function STPSuitabilityPanel({
 
               {/* Zone note */}
               <div style={{ fontSize: 7, color: "#64748b", padding: "2px 4px", background: "#dbeafe", borderRadius: 3 }}>
-                Zone: <strong>{selectedZones[0] ?? "—"}</strong>
+                Area: <strong>{selectedZones.length ? zoneLabels(selectedZones).join(", ") : "—"}</strong>
               </div>
 
               {/* Error */}

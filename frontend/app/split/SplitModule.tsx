@@ -8,9 +8,19 @@ import type { BasemapType, StickyNote, ViewerMessage } from "../shared/types";
 import SplitMasterPanel from "./components/SplitMasterPanel";
 import SplitViewerWindow from "./components/SplitViewerWindow";
 import type { STPWmsLayer } from "./components/STPSuitabilityPanel";
+import SplitMasterToolbar, { SaveState } from "./components/SplitMasterToolbar";
+import { useDatasets } from "../shared/components/DatasetCatalog";
+import MapLayersPanel from "../shared/components/MapLayersPanel";
+import { apiFetch, getUser } from "../shared/auth/authClient";
+import { useLoginPrompt } from "../shared/auth/LoginDialog";
+import type { Dataset } from "../shared/services/datasetService";
+import type { DrawMode, DrawnShape } from "../shared/map/DrawLayer";
+import type { MapControls } from "../shared/map/MapShell";
+import { withDrawnArea } from "../shared/drawnArea";
+import { DATASET_CATEGORIES } from "../shared/config";
 
 const AdminMap = dynamic(
-  () => import("./components/AdminMap"),
+  () => import("../shared/map/AdminMap"),
   { ssr: false },
 );
 
@@ -51,31 +61,12 @@ export type SplitSession = {
   gyanCriteria?: string[];
   jeevantCriteria?: string[];
   masterCollapsed?: boolean;
+  drawnPolygon?: DrawnShape | null;
+  visibleDatasetIds?: number[];
 };
 
-const SESSIONS_KEY = "split_sessions";
-export const RESTORE_SESSION_KEY = "split_restore_session";
-
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
-
-function saveSession(session: SplitSession) {
-  // Save to backend (permanent) and keep localStorage as fallback cache
-  try {
-    fetch(`${BACKEND_BASE}/sessions/save`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(session),
-    }).catch(() => {});
-  } catch { /* ignore */ }
-  try {
-    const raw = localStorage.getItem(SESSIONS_KEY);
-    const all: SplitSession[] = raw ? JSON.parse(raw) : [];
-    const idx = all.findIndex((s) => s.sessionId === session.sessionId);
-    if (idx >= 0) all[idx] = session; else all.push(session);
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(all));
-    window.dispatchEvent(new StorageEvent("storage", { key: SESSIONS_KEY }));
-  } catch { /* ignore */ }
-}
+const SAVE_DEBOUNCE_MS = 1500;
+const newSessionId = () => `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const getZoneName = (feature: any) => {
   const props = feature?.properties || {};
@@ -98,7 +89,24 @@ export default function SplitModule() {
   const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
   const { areaGeojson, riversGeojson, basinGeojson } = useLocationSelection();
 
-  const [layerState] = useState({ basin: true, rivers: true, area: true });
+  const [layerState, setLayerState] = useState({ basin: true, rivers: true, area: true });
+
+  // Uploaded data and the user's own clip area
+  const { datasets } = useDatasets();
+  const [visibleDatasetIds, setVisibleDatasetIds] = useState<number[]>([]);
+  const [drawnShape, setDrawnShape] = useState<DrawnShape | null>(null);
+  const [drawMode, setDrawMode] = useState<DrawMode>(null);
+  const [mapControls, setMapControls] = useState<MapControls | null>(null);
+  const visibleDatasets = useMemo(() => datasets.filter((d) => visibleDatasetIds.includes(d.id)), [datasets, visibleDatasetIds]);
+  const toggleDataset = useCallback((ds: Dataset) => {
+    setVisibleDatasetIds((ids) => (ids.includes(ds.id) ? ids.filter((i) => i !== ds.id) : [...ids, ds.id]));
+  }, []);
+
+  // Saving: automatic for signed-in users, a sign-in prompt otherwise
+  const { requireLogin, dialog: loginDialog } = useLoginPrompt();
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [visibleScreens, setVisibleScreens] = useState<Record<string, boolean>>({
     top: false, topSecondary: false, left: false, right: false, bottom: false,
   });
@@ -114,6 +122,8 @@ export default function SplitModule() {
   const [viewerScale, setViewerScale] = useState(0.75);
   const [mapView, setMapView] = useState<{ center: [number, number]; zoom: number } | null>(null);
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
+  // zones sent to every layer / analysis: the selected zones plus the drawn area, if any
+  const analysisZones = useMemo(() => withDrawnArea(selectedZones, drawnShape), [selectedZones, drawnShape]);
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [activeEditors, setActiveEditors] = useState<Record<string, string>>({});
   const [masterStickyMode, setMasterStickyMode] = useState(false);
@@ -238,7 +248,7 @@ export default function SplitModule() {
 
   // ── Session tracking ──────────────────────────────────────────────────────
   const sessionRef = useRef<SplitSession>({
-    sessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    sessionId: newSessionId(),
     startedAt: Date.now(),
     lastActivityAt: Date.now(),
     marks: [],
@@ -263,8 +273,48 @@ export default function SplitModule() {
 
   const mountedRef = useRef(false);
 
+  async function pushSession() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaveState("saving");
+    try {
+      const res = await apiFetch("/sessions/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sessionRef.current),
+      });
+      if (res.status === 401) return setSaveState("unsaved");
+      if (!res.ok) return setSaveState("error");
+      setSaveState("saved");
+      setSavedAt(Date.now());
+    } catch {
+      setSaveState("error");
+    }
+  }
+
+  function saveSession(_s: SplitSession) {
+    if (!getUser()) {
+      setSaveState("unsaved");
+      return;
+    }
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void pushSession(), SAVE_DEBOUNCE_MS);
+  }
+
+  const handleSaveClick = async () => {
+    if (!(await requireLogin("Sign in to save this Split session to your history"))) return;
+    await pushSession();
+  };
+
+  const handleNewSession = () => {
+    // ?new skips restoring the last session on load
+    window.location.href = "/split?new=1";
+  };
+
   function hasActivity(s: SplitSession) {
-    return s.marks.length > 0 || s.stickyNotes.length > 0;
+    return (
+      s.marks.length > 0 || s.stickyNotes.length > 0 || s.zones.length > 0 || s.criteria.length > 0 ||
+      !!s.drawnPolygon || (s.visibleDatasetIds?.length ?? 0) > 0
+    );
   }
 
   function persistIfActive(s: SplitSession) {
@@ -371,6 +421,12 @@ export default function SplitModule() {
     persistIfActive(sessionRef.current);
   }, [viewerMessages]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    sessionRef.current = { ...sessionRef.current, drawnPolygon: drawnShape, visibleDatasetIds, lastActivityAt: Date.now() };
+    persistIfActive(sessionRef.current);
+  }, [drawnShape, visibleDatasetIds]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   function addMark(mark: SplitMark) {
     const s = sessionRef.current;
     sessionRef.current = { ...s, marks: [...s.marks, mark], lastActivityAt: Date.now() };
@@ -428,36 +484,58 @@ export default function SplitModule() {
     setMapView({ center, zoom });
   }, []);
 
-  // Restore a previous session if requested from the holistic page
+  function applySession(s: SplitSession) {
+    if (s.stickyNotes?.length) setStickyNotes(s.stickyNotes);
+    if (s.activeZones?.length) setSelectedZones(s.activeZones);
+    if (s.basemap) setBasemap(s.basemap as BasemapType);
+    if (s.messages?.length) setViewerMessages(s.messages);
+    if (s.screenNames) setScreenNames(s.screenNames);
+    if (s.visibleScreens) setVisibleScreens(s.visibleScreens);
+    if (s.activeModule) setActiveModule(s.activeModule as typeof activeModule);
+    if (s.viewerScale) setViewerScale(s.viewerScale);
+    if (s.mapView) setMapView(s.mapView);
+    if (s.masterCollapsed !== undefined) setMasterCollapsed(s.masterCollapsed);
+    if (s.drawnPolygon) setDrawnShape(s.drawnPolygon);
+    if (s.visibleDatasetIds?.length) setVisibleDatasetIds(s.visibleDatasetIds);
+    // Restore per-module criteria
+    if (s.activeCriteria?.length) setAviralCriteria(s.activeCriteria);
+    if (s.nirmalCriteria?.length) setNirmalCriteria(s.nirmalCriteria);
+    if (s.janCriteria?.length) setJanCriteria(s.janCriteria);
+    if (s.arthCriteria?.length) setArthCriteria(s.arthCriteria);
+    if (s.gyanCriteria?.length) setGyanCriteria(s.gyanCriteria);
+    if (s.jeevantCriteria?.length) setJeevantCriteria(s.jeevantCriteria);
+    // Keep the same session id so further work updates this history entry
+    sessionRef.current = { ...sessionRef.current, ...s, marks: s.marks ?? [], stickyNotes: s.stickyNotes ?? [], messages: s.messages ?? [] };
+    setSaveState("saved");
+    setSavedAt(s.lastActivityAt ?? null);
+  }
+
+  // Open where the user left off: a session picked in History (?session=…), else the user's
+  // most recent session. ?new=1 starts empty.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(RESTORE_SESSION_KEY);
-      if (raw) {
-        localStorage.removeItem(RESTORE_SESSION_KEY);
-        const s: SplitSession = JSON.parse(raw);
-        if (s.stickyNotes?.length) setStickyNotes(s.stickyNotes);
-        if (s.activeZones?.length) setSelectedZones(s.activeZones);
-        if (s.basemap) setBasemap(s.basemap as BasemapType);
-        if (s.messages?.length) setViewerMessages(s.messages);
-        if (s.screenNames) setScreenNames(s.screenNames);
-        if (s.visibleScreens) setVisibleScreens(s.visibleScreens);
-        if (s.activeModule) setActiveModule(s.activeModule as typeof activeModule);
-        if (s.viewerScale) setViewerScale(s.viewerScale);
-        if (s.mapView) setMapView(s.mapView);
-        if (s.masterCollapsed !== undefined) setMasterCollapsed(s.masterCollapsed);
-        // Restore per-module criteria
-        if (s.activeCriteria?.length) setAviralCriteria(s.activeCriteria);
-        if (s.nirmalCriteria?.length) setNirmalCriteria(s.nirmalCriteria);
-        if (s.janCriteria?.length) setJanCriteria(s.janCriteria);
-        if (s.arthCriteria?.length) setArthCriteria(s.arthCriteria);
-        if (s.gyanCriteria?.length) setGyanCriteria(s.gyanCriteria);
-        if (s.jeevantCriteria?.length) setJeevantCriteria(s.jeevantCriteria);
-        // Reuse same session so future marks append to it
-        sessionRef.current = { ...s };
-      }
-    } catch { /* ignore */ }
-    // Mark mount as done — all sync effects are now active
-    mountedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const requested = params.get("session");
+      let restored: SplitSession | null = null;
+      try {
+        if (requested) {
+          if (await requireLogin("Sign in to open your saved session")) {
+            const r = await apiFetch(`/sessions/${encodeURIComponent(requested)}`);
+            if (r.ok) restored = await r.json();
+          }
+        } else if (!params.has("new") && getUser()) {
+          const r = await apiFetch("/sessions/latest");
+          if (r.ok) restored = (await r.json()).session;
+        }
+      } catch { /* start empty */ }
+      if (requested || params.has("new")) window.history.replaceState(null, "", "/split");
+      if (cancelled) return;
+      if (restored) applySession(restored);
+      // Mark mount as done — all sync effects are now active
+      mountedRef.current = true;
+    })();
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -499,6 +577,12 @@ export default function SplitModule() {
     activeModule === "Jeevant Ganga" ? setJeevantCombinedTiff :
     setCombinedTiff;
 
+  const activeDataCategory = DATASET_CATEGORIES.find((c) => c.label === activeModule);
+  const moduleDatasets = useMemo(
+    () => (activeDataCategory ? datasets.filter((d) => d.status === "ready" && d.kind !== "table" && d.category === activeDataCategory.key) : []),
+    [datasets, activeDataCategory],
+  );
+
   // Dynamic offset: each top viewer is effectiveW*scale px wide; half + gap keeps them from overlapping
   const topBaseW = aviralCriteria.length > 0 ? Math.round(420 * 1.2) : 420;
   const topPairOffset = Math.round((topBaseW * viewerScale) / 2) + 20;
@@ -522,20 +606,6 @@ export default function SplitModule() {
       ref={containerRef}
       className="fixed inset-0 overflow-hidden bg-[#0a0e1a]"
     >
-      <div className="absolute right-4 top-4 z-[950]">
-        <a
-          href="/homepage"
-          className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur-md ring-1 ring-white/10 transition-all hover:bg-white/20 hover:shadow-lg"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-          </svg>
-          Dashboard
-        </a>
-      </div>
-
-  
 
       <div
         ref={mainMapRef}
@@ -546,7 +616,7 @@ export default function SplitModule() {
         }}
       >
         <AdminMap
-          selectedZones={selectedZones}
+          selectedZones={analysisZones}
           areaGeojson={layerState.area ? areaGeojson : null}
           riversGeojson={layerState.rivers ? riversGeojson : null}
           basinGeojson={layerState.basin ? basinGeojson : null}
@@ -575,6 +645,15 @@ export default function SplitModule() {
           stpWmsLayers={Object.values(mainStpLayers).filter(Boolean) as STPWmsLayer[]}
           stpAreaWmsLayers={Object.values(mainStpAreaLayers).filter(Boolean) as STPWmsLayer[]}
           aviralTiff={activeTiffForModule}
+          onBasemapChange={setBasemap}
+          drawnShape={drawnShape}
+          onDrawnShapeChange={setDrawnShape}
+          datasets={visibleDatasets}
+          // controls live in the master panel toolbar, not on the map
+          tools={["zoom", "coords", "scale"]}
+          drawMode={drawMode}
+          onDrawModeChange={setDrawMode}
+          onControls={setMapControls}
         />
       </div>
 
@@ -596,7 +675,7 @@ export default function SplitModule() {
           basinGeojson={basinGeojson}
           layerState={layerState}
           mapView={mapView}
-          selectedZones={selectedZones}
+          selectedZones={analysisZones}
           stickyNotes={stickyNotes}
           onCreateStickyNote={(note) => {
             const id = `${Date.now()}-${Math.random()}`;
@@ -685,12 +764,39 @@ export default function SplitModule() {
           if (mod !== "Arth Ganga") setArthCriteria([]);
           if (mod !== "Gyan Ganga") setGyanCriteria([]);
           if (mod !== "Jeevant Ganga") setJeevantCriteria([]);
+          setVisibleDatasetIds([]);
           setActiveModule(mod);
           setActiveCombinedMeta(null);
         }}
         onResetAllSTP={handleResetAllSTP}
         onActiveCombinedMetaChange={setActiveCombinedMeta}
+        hasDrawnArea={!!drawnShape}
+        uploadedDatasets={moduleDatasets}
+        visibleDatasetIds={visibleDatasetIds}
+        onToggleDataset={(id) => setVisibleDatasetIds((ids) => (ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]))}
+        toolbar={
+          <SplitMasterToolbar
+            saveState={saveState}
+            savedAt={savedAt}
+            onSave={handleSaveClick}
+            onNewSession={handleNewSession}
+            layersPanel={
+              <MapLayersPanel
+                baseLayers={layerState}
+                onBaseLayersChange={setLayerState}
+                visibleDatasets={visibleDatasets}
+                onToggleDataset={toggleDataset}
+              />
+            }
+            drawMode={drawMode}
+            onDrawModeChange={setDrawMode}
+            hasDrawing={!!drawnShape}
+            onClearDrawing={() => setDrawnShape(null)}
+            controls={mapControls}
+          />
+        }
       />
+      {loginDialog}
     </div>
   );
 }

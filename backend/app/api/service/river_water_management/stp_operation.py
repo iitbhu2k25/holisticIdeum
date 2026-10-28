@@ -38,6 +38,8 @@ from shapely.ops import unary_union
 from app.conf.redis.redis_async_manager import async_redis_manager
 from shapely.geometry import shape, LineString, Point
 from app.api.exception.exceptions import CustomException
+from app.api.service.holistic.geo_utils import DRAWN_PREFIX, split_drawn_area
+from app.conf.logging import logger
 
 geo=Geoserver()
 
@@ -799,35 +801,49 @@ class STPsuitabilityMapper(STP_Area):
         normalized = self._normalize_zone_name(vector_name)
         return os.path.join(self.BASE_DIR, "media", "Rajat_data", "shape_stp", "area", normalized, f"{normalized}.shp")
     
-    def _get_elivation_value(self, place: str):
-        """Load zone shapefile(s) from comma-separated place names and return (elevation_values, union_gdf)."""
-        zone_names = [z.strip() for z in (place or "").split(',') if z.strip()]
+    def _place_area(self, place: str) -> gpd.GeoDataFrame | None:
+        """Area named by `place`: comma-separated zones, optionally followed by a drawn polygon
+        ("DRAWN AREA::<geojson>", always last). Zones + drawing gives their overlap."""
+        place = place or ""
+        drawn_part = None
+        if DRAWN_PREFIX in place:
+            place, drawn_json = place.split(DRAWN_PREFIX, 1)
+            _, drawn_part = split_drawn_area([DRAWN_PREFIX + drawn_json])
+
         gdfs = []
-        for zone_name in zone_names:
+        for zone_name in [z.strip() for z in place.split(',') if z.strip()]:
             vector_path = self.get_vector_file(zone_name)
             try:
-                gdf = gpd.read_file(vector_path)
-                gdfs.append(gdf)
+                gdfs.append(gpd.read_file(vector_path))
             except Exception as e:
                 logger.warning(f"Could not read zone shapefile {vector_path}: {e}")
 
+        drawn = gpd.GeoDataFrame(geometry=[drawn_part], crs="EPSG:4326") if drawn_part is not None else None
         if not gdfs:
+            return drawn
+
+        first_crs = gdfs[0].crs
+        all_geoms = []
+        for gdf in gdfs:
+            g = gdf.to_crs(first_crs) if gdf.crs and gdf.crs != first_crs else gdf
+            all_geoms.extend(g.geometry.tolist())
+        area = unary_union(all_geoms)
+        if drawn is not None:
+            area = area.intersection(drawn.to_crs(first_crs).geometry.iloc[0])
+            if area.is_empty:
+                raise CustomException(400, "The drawn area does not overlap the selected zones")
+        return gpd.GeoDataFrame(geometry=[area], crs=first_crs)
+
+    def _get_elivation_value(self, place: str):
+        """Return (elevation at the area centroid, area GeoDataFrame) for the zones / drawn area in `place`."""
+        village_vector = self._place_area(place)
+        if village_vector is None:
             return [0.0], None
 
-        if len(gdfs) == 1:
-            village_vector = gdfs[0]
-        else:
-            first_crs = gdfs[0].crs
-            all_geoms = []
-            for gdf in gdfs:
-                g = gdf.to_crs(first_crs) if gdf.crs and gdf.crs != first_crs else gdf
-                all_geoms.extend(g.geometry.tolist())
-            union_geom = unary_union(all_geoms)
-            village_vector = gpd.GeoDataFrame(geometry=[union_geom], crs=first_crs)
-
         try:
-            centroid = village_vector.geometry.centroid
             with rasterio.open(self.elivation_raster) as src:
+                # sample in the raster's CRS (a drawn area arrives in EPSG:4326)
+                centroid = village_vector.to_crs(src.crs).geometry.centroid
                 coords = [(x, y) for x, y in zip(centroid.x, centroid.y)]
                 centroid_value = [float(val[0]) for val in src.sample(coords)]
         except Exception as e:
@@ -982,9 +998,11 @@ class STPsuitabilityMapper(STP_Area):
         cluster_gdf, crs = await self._find_suitable_cluster(
             payload.mld_capacity, payload.treatment_technology, payload.custom_land_per_mld, payload.layer_name
         )
-        vector_path = self.get_vector_file(payload.place)
-        village_vector = gpd.read_file(vector_path)
-        centroid = village_vector.geometry.centroid
+        village_vector = self._place_area(payload.place)
+        if village_vector is None:
+            raise CustomException(400, "Select a zone or draw an area first")
+        # _find_suitable_path expects longitude/latitude; take the centroid in a metric CRS, then convert
+        centroid = village_vector.to_crs(village_vector.estimate_utm_crs()).geometry.centroid.to_crs("EPSG:4326")
         final_cluster = self._find_suitable_path(cluster_gdf, centroid)
         final_cluster_name = None
         if final_cluster is not None and not final_cluster.empty:

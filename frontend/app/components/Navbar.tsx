@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
+import UserMenu from './UserMenu';
 
 // ============================================================================
 // TYPES
@@ -258,12 +259,14 @@ export default function ResponsiveNavbar() {
           <div className="lg:hidden w-full mt-3">
             <div className="flex flex-col border-t border-orange-200 pt-3">
               {navItems.map((item, idx) => renderMobileNavItem(item, idx))}
+              <div className="px-5 py-4"><UserMenu onNavigate={() => setMenuOpen(false)} /></div>
             </div>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden lg:flex lg:items-center lg:justify-between lg:flex-wrap w-full gap-1">
             {navItems.map((item, idx) => renderDesktopNavItem(item, idx))}
+            <UserMenu />
           </div>
 
         </div>

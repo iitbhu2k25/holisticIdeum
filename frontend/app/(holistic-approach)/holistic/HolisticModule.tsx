@@ -1,21 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import "leaflet/dist/leaflet.css";
+import { Columns2, Database, PanelLeft, PanelRight, SlidersHorizontal, X } from "lucide-react";
 import AdminLocation, { STAGE_CONFIGS } from "./components/AdminLocation";
-import AdminMap from "./components/AdminMap";
-import type { BasemapType } from "./components/AdminMap";
+import type { BasemapType } from "../../shared/types";
 import type { RwqSeason } from "../../shared/map-layers/NirmalRwqLayer";
 import { useLocationSelection } from "../../shared/hooks/useLocationSelection";
-import SplitActivityPanel from "./components/SplitActivityPanel";
+import SessionHistory from "../../shared/components/SessionHistory";
+import DatasetCatalog, { ClipEntry, useDatasets } from "../../shared/components/DatasetCatalog";
+import MapLayersPanel from "../../shared/components/MapLayersPanel";
+import UserMenu from "../../components/UserMenu";
+import { categoryForStage } from "../../shared/config";
+import { savePhaseRaster } from "../../shared/phaseRasterClient";
+import type { Dataset } from "../../shared/services/datasetService";
+import type { DrawnShape } from "../../shared/map/DrawLayer";
+import { withDrawnArea, zoneLabels } from "../../shared/drawnArea";
 
-const BASEMAP_OPTIONS: { key: BasemapType; label: string; emoji: string }[] = [
-  { key: "terrain",   label: "Terrain",   emoji: "⛰️" },
-  { key: "satellite", label: "Satellite", emoji: "🛰️" },
-  { key: "streets",   label: "Streets",   emoji: "🛣️" },
-  { key: "dark",      label: "Dark",      emoji: "🌑" },
-];
+const AdminMap = dynamic(() => import("../../shared/map/AdminMap"), { ssr: false });
 
 type HolisticModuleProps = {
   hideLeftPanel?: boolean;
@@ -201,9 +205,30 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
     onZoneChange,
   } = useLocationSelection();
 
-  const [locationVisible, setLocationVisible] = useState(!hideLeftPanel);
+  const [leftOpen, setLeftOpen] = useState(!hideLeftPanel);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [leftTab, setLeftTab] = useState<"analysis" | "data">("analysis");
   const [basemap, setBasemap] = useState<BasemapType>("terrain");
-  const [showBasemapPicker, setShowBasemapPicker] = useState(false);
+  const [baseLayers, setBaseLayers] = useState({ area: true, rivers: true, basin: true });
+
+  // Uploaded data: what is drawn on the map, the user's clip area and the clipped results
+  const { datasets } = useDatasets();
+  const [visibleDatasetIds, setVisibleDatasetIds] = useState<number[]>([]);
+  const [drawnShape, setDrawnShape] = useState<DrawnShape | null>(null);
+  const [clips, setClips] = useState<ClipEntry[]>([]);
+  // zones sent to every analysis / clip: the selected zones plus the drawn area, if any
+  const analysisZones = useMemo(() => withDrawnArea(selectedZones, drawnShape), [selectedZones, drawnShape]);
+  const visibleDatasets = useMemo(() => datasets.filter((d) => visibleDatasetIds.includes(d.id)), [datasets, visibleDatasetIds]);
+  const toggleDataset = useCallback((ds: Dataset) => {
+    setVisibleDatasetIds((ids) => (ids.includes(ds.id) ? ids.filter((i) => i !== ds.id) : [...ids, ds.id]));
+  }, []);
+  const onDrawnShapeChange = useCallback((shape: DrawnShape | null) => {
+    setDrawnShape(shape);
+    if (shape) {
+      setLeftOpen(true);
+      setLeftTab("data");
+    }
+  }, []);
 
   // All stage snapshots — index 0 = stage 1 (Aviral Ganga), index 1 = stage 2 (Nirmal Ganga), etc.
   const [stageIndex, setStageIndex] = useState(0);
@@ -345,7 +370,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
     });
 
     const nextResult: any = {
-      selected_zones: selectedZones,
+      selected_zones: analysisZones,
       rainfall: { years: [], by_zone: {} },
       groundwater: { by_zone: {} },
       tributary_drain: { layers: [], summary: {} },
@@ -357,7 +382,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsRainfall) {
         const res = await fetch(`${backendBase}/analysis/rainfall`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -377,7 +402,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsGroundwater) {
         const res = await fetch(`${backendBase}/analysis/groundwater`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -390,7 +415,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsTributaryDrain) {
         const res = await fetch(`${backendBase}/analysis/tributary-drain`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -403,7 +428,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsDemSlope) {
         const res = await fetch(`${backendBase}/analysis/dem-slope`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -416,7 +441,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsFlowDirection) {
         const res = await fetch(`${backendBase}/analysis/flow-direction`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -429,7 +454,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsStp) {
         const res = await fetch(`${backendBase}/analysis/nirmal-stp`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -442,7 +467,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsRiverWaterQuality) {
         const res = await fetch(`${backendBase}/analysis/nirmal-rwq-stats`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -455,7 +480,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsRiverFlow) {
         const res = await fetch(`${backendBase}/analysis/river-flow`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -468,7 +493,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsChannelGeom) {
         const res = await fetch(`${backendBase}/analysis/channel-geometry`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -481,7 +506,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsArth && arthCriteriaNeeded.length) {
         const res = await fetch(`${backendBase}/analysis/arth-ganga`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones, criteria: arthCriteriaNeeded }),
+          body: JSON.stringify({ selected_zones: analysisZones, criteria: arthCriteriaNeeded }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -494,7 +519,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsGyan && gyanCriteriaNeeded.length) {
         const res = await fetch(`${backendBase}/analysis/gyan-ganga`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones, criteria: gyanCriteriaNeeded }),
+          body: JSON.stringify({ selected_zones: analysisZones, criteria: gyanCriteriaNeeded }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -507,7 +532,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsJeevant && jeevantCriteriaNeeded.length) {
         const res = await fetch(`${backendBase}/analysis/jeevant-ganga`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones, criteria: jeevantCriteriaNeeded }),
+          body: JSON.stringify({ selected_zones: analysisZones, criteria: jeevantCriteriaNeeded }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -520,7 +545,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsPopulation) {
         const res = await fetch(`${backendBase}/analysis/population`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -533,7 +558,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsGramPanchayat) {
         const res = await fetch(`${backendBase}/analysis/gram-panchayat`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -546,7 +571,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       if (nowWantsIndustrial) {
         const res = await fetch(`${backendBase}/analysis/industrial-discharge`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selected_zones: selectedZones }),
+          body: JSON.stringify({ selected_zones: analysisZones }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -596,7 +621,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
   }, [snap.criteriaWeights, stageIndex]);
 
   const onGeneratePhaseRaster = useCallback(async () => {
-    if (snap.phaseLoading || !snap.selectedDataUsed.length || !selectedZones.length) return;
+    if (snap.phaseLoading || !snap.selectedDataUsed.length || !analysisZones.length) return;
     patchSnap({ phaseLoading: true, phaseError: "", phaseTiff: null, showPhaseOnMap: false });
     try {
       const weights: Record<string, number> = {};
@@ -606,7 +631,7 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       const res = await fetch(`${backendBase}/analysis/phase-raster`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage_index: stageIndex, selected_zones: selectedZones, criteria_weights: weights }),
+        body: JSON.stringify({ stage_index: stageIndex, selected_zones: analysisZones, criteria_weights: weights }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -615,21 +640,19 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
       }
       const tiff = await res.arrayBuffer();
       patchSnap({ phaseTiff: tiff, phaseLoading: false });
-      // Persist to media/temp on the backend so /split page can read it
-      try {
-        const form = new FormData();
-        form.append("stage_index", String(stageIndex));
-        form.append("stage_name", STAGE_CONFIGS[stageIndex]?.title ?? `Stage ${stageIndex + 1}`);
-        form.append("criteria", JSON.stringify(snap.selectedDataUsed));
-        form.append("weights", JSON.stringify(weights));
-        form.append("tiff", new Blob([tiff], { type: "image/tiff" }), `phase_raster_${stageIndex}.tif`);
-        await fetch(`${backendBase}/analysis/save-phase-raster`, { method: "POST", body: form });
-      } catch { /* non-critical — ignore save errors */ }
+      // Keep it for the /split page (browser copy, plus the user's server copy when signed in)
+      await savePhaseRaster(
+        stageIndex,
+        STAGE_CONFIGS[stageIndex]?.title ?? `Stage ${stageIndex + 1}`,
+        snap.selectedDataUsed,
+        weights,
+        tiff,
+      ).catch(() => { /* non-critical */ });
     } catch (err) {
       patchSnap({ phaseError: err instanceof Error ? err.message : "Request failed", phaseLoading: false });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap.phaseLoading, snap.selectedDataUsed, snap.criteriaWeights, selectedZones, backendBase, stageIndex]);
+  }, [snap.phaseLoading, snap.selectedDataUsed, snap.criteriaWeights, analysisZones, backendBase, stageIndex]);
 
   const { analysisResult, showRainfallLayer, showRechargeLayer, selectedRainfallYear,
     outputLoading, rainfallError, groundwaterError, tributaryDrainError,
@@ -645,185 +668,233 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
   const { phaseLoading, phaseError, phaseTiff, showPhaseOnMap } = snap;
 
 
+  const stageCategory = categoryForStage(stageIndex);
+  const stageDatasetCount = datasets.filter((d) => d.status === "ready" && d.category === stageCategory.key).length;
+
   return (
-    <div className="min-h-screen bg-[#eef2f8] p-1 md:p-2">
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 md:px-4">
-          <h1 className="text-3xl font-extrabold tracking-tight text-blue-800 md:text-[42px]">Holistic River Management</h1>
-          <div className="flex items-center gap-3">
-            <SplitActivityPanel />
-            <Link
-              href="/homepage"
-              className="rounded-lg bg-slate-300 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-            >
-              Home
-            </Link>
-          </div>
-        </div>
-
-        <div className="relative h-[calc(100vh-96px)] min-h-[620px] overflow-hidden p-2">
-          <div className="h-full w-full">
-            <AdminMap
-              selectedZones={selectedZones}
-              zoneOptions={zoneOptions.map((z) => z.value)}
-              areaGeojson={areaGeojson}
-              riversGeojson={riversGeojson}
-              basinGeojson={basinGeojson}
-              selectedZoneGeojson={selectedZoneGeojson}
-              analysisResult={analysisResult}
-              showRainfallLayer={showRainfallLayer}
-              showRechargeLayer={showRechargeLayer}
-              rainfallYear={selectedRainfallYear}
-              clipApiBase={backendBase}
-              industrialGeojson={wantsIndustrial ? industrialGeojson : null}
-              gramPanchayatGeojson={wantsGramPanchayat ? gramPanchayatGeojson : null}
-              populationGeojson={wantsPopulation ? populationGeojson : null}
-              activeCriteria={[
-                ...(wantsRiverFlow ? ["River flow"] : []),
-                ...(wantsIndustrial ? ["Industrial discharge"] : []),
-                ...(wantsGramPanchayat ? ["Gram Panchayat data"] : []),
-                ...(wantsPopulation ? ["Population (urban/rural)"] : []),
-                ...(wantsTributaryDrain ? ["Tributary & drain flow"] : []),
-                ...(wantsChannelGeom ? ["Channel geometry (width, depth)"] : []),
-                ...(wantsDemSlope ? ["DEM, slope maps"] : []),
-                ...(wantsFlowDirection ? ["Surface flow direction & accumulation maps"] : []),
-                ...(wantsGroundwaterQuality ? ["Groundwater quality"] : []),
-                ...(wantsRiverWaterQuality ? ["River water quality"] : []),
-                ...(wantsStp ? ["STP details"] : []),
-                ...(wantsAgriculture   ? ["Agriculture (crop area, water demand)"] : []),
-                ...(wantsIrrigation   ? ["Irrigation dependency"] : []),
-                ...(wantsTourism      ? ["Tourism & cultural nodes"] : []),
-                ...(wantsGhats        ? ["Ghats & heritage sites"] : []),
-                ...(wantsEconomic     ? ["Economic activity zones"] : []),
-                ...(wantsBaseline     ? ["All baseline datasets"] : []),
-                ...(wantsGisData      ? ["Remote sensing + GIS maps"] : []),
-                ...(wantsSwat         ? ["SWAT model outputs"] : []),
-                ...(wantsHydrogeology ? ["Hydrogeology (aquifer, MAR, paleo-channels)"] : []),
-                ...(wantsSensor       ? ["Monitoring stations & sensors"] : []),
-                ...(wantsWetlands     ? ["Wetlands, ponds, lakes"] : []),
-                ...(wantsRiparian     ? ["Riparian vegetation"] : []),
-                ...(wantsBiodiversity ? ["Biodiversity (fish, birds, invasive species)"] : []),
-                ...(wantsFloodplain   ? ["Floodplain & habitat data"] : []),
-              ]}
-              rwqSeason={rwqSeason}
-              onStpDataLoaded={onStpDataLoaded}
-              aviralTiff={showPhaseOnMap ? phaseTiff : null}
-              basemap={basemap}
-            />
-
-            {/* ── Basemap switcher — bottom-right inside the map ── */}
-            <div style={{ position: "absolute", bottom: 24, right: 16, zIndex: 950, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              {showBasemapPicker && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "rgba(255,255,255,0.95)", borderRadius: 12, padding: "8px 6px", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", border: "1px solid #e2e8f0" }}>
-                  {BASEMAP_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => { setBasemap(opt.key); setShowBasemapPicker(false); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                        background: basemap === opt.key ? "#eff6ff" : "transparent",
-                        color: basemap === opt.key ? "#1d4ed8" : "#374151",
-                        fontWeight: basemap === opt.key ? 700 : 500,
-                        fontSize: 12,
-                        outline: basemap === opt.key ? "1.5px solid #93c5fd" : "none",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <span style={{ fontSize: 15 }}>{opt.emoji}</span>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+    <div className="flex h-screen flex-col bg-slate-100">
+      {/* ── top bar ── */}
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3">
+        <button
+          type="button"
+          onClick={() => setLeftOpen((v) => !v)}
+          title={leftOpen ? "Hide left panel" : "Show left panel"}
+          className={`rounded-lg p-2 ${leftOpen ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-100"}`}
+        >
+          <PanelLeft className="h-4 w-4" />
+        </button>
+        <Link href="/homepage" className="mr-2 whitespace-nowrap text-base font-bold text-slate-900 md:text-lg">
+          Holistic River Management
+        </Link>
+        <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto lg:flex">
+          {STAGE_CONFIGS.map((stage, i) => {
+            const reachable = i < snapshots.length;
+            const color = categoryForStage(i).color;
+            return (
               <button
+                key={stage.title}
                 type="button"
-                onClick={() => setShowBasemapPicker((p) => !p)}
-                title="Change basemap"
-                style={{
-                  width: 40, height: 40, borderRadius: "50%", border: "2px solid #e2e8f0",
-                  background: "#fff", boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
-                  cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "box-shadow 0.15s",
-                }}
-              >
-                {BASEMAP_OPTIONS.find((o) => o.key === basemap)?.emoji ?? "🗺️"}
-              </button>
-            </div>
-          </div>
-
-          {!hideLeftPanel ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setLocationVisible((prev) => !prev)}
-                className="absolute left-4 top-4 z-[950] rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm font-bold text-slate-700 shadow transition hover:bg-slate-50"
-                title={locationVisible ? "Hide Location" : "Show Location"}
-                aria-label={locationVisible ? "Hide Location" : "Show Location"}
-              >
-                {locationVisible ? "◀" : "▶"}
-              </button>
-
-              <div
-                className={`pointer-events-none absolute bottom-4 left-4 top-4 z-[900] w-[340px] max-w-[90vw] transform transition-all duration-300 ease-out ${
-                  locationVisible ? "translate-x-0 opacity-100" : "-translate-x-[105%] opacity-0"
+                disabled={!reachable}
+                onClick={() => setStageIndex(i)}
+                title={reachable ? stage.title : "Proceed through the earlier stages first"}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  i === stageIndex ? "text-white shadow" : reachable ? "bg-slate-100 text-slate-700 hover:bg-slate-200" : "text-slate-300"
                 }`}
+                style={i === stageIndex ? { background: color } : undefined}
               >
-                <div className="pointer-events-auto h-full">
-                  <AdminLocation
-                    error={error}
-                    loading={loading}
-                    onToggleLocation={() => setLocationVisible(false)}
-                    stageIndex={stageIndex}
-                    selectedDataUsed={snap.selectedDataUsed}
-                    onToggleDataUsed={onToggleDataUsed}
-                    onProceed={onProceed}
-                    proceedDisabled={snap.selectedDataUsed.length === 0}
-                    proceededOnce={snap.proceededOnce}
-                    onNext={onNext}
-                    onPrevious={onPrevious}
-                    onGeneratePdf={() => window.print()}
+                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${i === stageIndex ? "bg-white/25" : "bg-white"}`}>{i + 1}</span>
+                {stage.title}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="ml-auto flex items-center gap-2">
+          <SessionHistory />
+          <Link href="/split" className="hidden items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:inline-flex">
+            <Columns2 className="h-3.5 w-3.5" /> Split view
+          </Link>
+          <UserMenu />
+          <button
+            type="button"
+            onClick={() => setRightOpen((v) => !v)}
+            title={rightOpen ? "Hide outputs" : "Show outputs"}
+            className={`rounded-lg p-2 ${rightOpen ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-100"}`}
+          >
+            <PanelRight className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* ── left panel ── */}
+        {leftOpen ? (
+          <aside className="flex w-[340px] max-w-[85vw] shrink-0 flex-col border-r border-slate-200 bg-white">
+            <div className="flex shrink-0 border-b border-slate-200 text-sm font-semibold">
+              {([
+                ["analysis", "Analysis", SlidersHorizontal],
+                ["data", `Uploaded data${stageDatasetCount ? ` (${stageDatasetCount})` : ""}`, Database],
+              ] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setLeftTab(key)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 border-b-2 px-3 py-2.5 ${
+                    leftTab === key ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1">
+              {leftTab === "analysis" ? (
+            <AdminLocation
+              error={error}
+              loading={loading}
+              onToggleLocation={() => setLeftOpen(false)}
+              stageIndex={stageIndex}
+              selectedDataUsed={snap.selectedDataUsed}
+              onToggleDataUsed={onToggleDataUsed}
+              onProceed={onProceed}
+              proceedDisabled={snap.selectedDataUsed.length === 0}
+              proceededOnce={snap.proceededOnce}
+              onNext={onNext}
+              onPrevious={onPrevious}
+              onGeneratePdf={() => window.print()}
+              selectedZones={selectedZones}
+              hasDrawnArea={!!drawnShape}
+              zoneOptions={zoneOptions}
+              displayedZones={displayedZones}
+              onZoneChange={onZoneChange}
+              criteriaWeights={criteriaWeights}
+              onWeightChange={onWeightChange}
+              onGenerateSuitability={onGeneratePhaseRaster}
+              suitabilityLoading={phaseLoading}
+              suitabilityError={phaseError}
+              suitabilityReady={!!phaseTiff}
+              showSuitabilityOnMap={showPhaseOnMap}
+              onToggleSuitabilityOnMap={() => patchSnap({ showPhaseOnMap: !snap.showPhaseOnMap })}
+              showAviralPanel={snap.showPhasePanel}
+              onToggleAviralPanel={() => patchSnap({ showPhasePanel: !snap.showPhasePanel })}
+            />
+              ) : (
+                <div className="h-full overflow-y-auto p-4">
+                  <p className="text-sm font-bold text-slate-900">{stageCategory.label} data</p>
+                  <p className="mb-3 text-xs text-slate-500">Data uploaded by the administrator for this stage.</p>
+                  <div className="mb-3 space-y-1.5 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600">
+                    <p><span className="font-semibold">Zones:</span> {selectedZones.length ? selectedZones.join(", ") : "none selected"}</p>
+                    <p className="flex items-center justify-between gap-2">
+                      <span><span className="font-semibold">Drawn area:</span> {drawnShape ? "yes" : "none — use the polygon tool on the map"}</span>
+                      {drawnShape ? (
+                        <button type="button" onClick={() => setDrawnShape(null)} className="inline-flex items-center gap-0.5 text-slate-500 hover:text-red-600">
+                          <X className="h-3 w-3" /> clear
+                        </button>
+                      ) : null}
+                    </p>
+                  </div>
+                  <DatasetCatalog
+                    category={stageCategory.key}
+                    visibleIds={visibleDatasetIds}
+                    onToggleVisible={toggleDataset}
                     selectedZones={selectedZones}
-                    zoneOptions={zoneOptions}
-                    displayedZones={displayedZones}
-                    onZoneChange={onZoneChange}
-                    criteriaWeights={criteriaWeights}
-                    onWeightChange={onWeightChange}
-                    onGenerateSuitability={onGeneratePhaseRaster}
-                    suitabilityLoading={phaseLoading}
-                    suitabilityError={phaseError}
-                    suitabilityReady={!!phaseTiff}
-                    showSuitabilityOnMap={showPhaseOnMap}
-                    onToggleSuitabilityOnMap={() => patchSnap({ showPhaseOnMap: !snap.showPhaseOnMap })}
-                    showAviralPanel={snap.showPhasePanel}
-                    onToggleAviralPanel={() => patchSnap({ showPhasePanel: !snap.showPhasePanel })}
+                    drawnShape={drawnShape}
+                    clips={clips}
+                    onClip={(entry) => setClips((c) => [...c.filter((x) => x.id !== entry.id), entry])}
+                    onRemoveClip={(id) => setClips((c) => c.filter((x) => x.id !== id))}
                   />
                 </div>
-              </div>
-            </>
-          ) : null}
+              )}
+            </div>
+          </aside>
+        ) : null}
 
-          {showOutputs ? (
-            <aside className="absolute bottom-4 right-4 top-4 z-[900] w-[430px] max-w-[42vw] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <div className="h-full overflow-y-auto p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-extrabold text-slate-900">Outputs</h3>
-                    <p className="text-xs text-slate-500">{STAGE_CONFIGS[stageIndex]?.title ?? `Stage ${stageIndex + 1}`}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => patchSnap({ showOutputs: false })}
-                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Hide
-                  </button>
+        {/* ── map ── */}
+        <main className="relative min-w-0 flex-1">
+                <AdminMap
+                  selectedZones={analysisZones}
+                  zoneOptions={zoneOptions.map((z) => z.value)}
+                  areaGeojson={baseLayers.area ? areaGeojson : null}
+                  riversGeojson={baseLayers.rivers ? riversGeojson : null}
+                  basinGeojson={baseLayers.basin ? basinGeojson : null}
+                  selectedZoneGeojson={selectedZoneGeojson}
+                  analysisResult={analysisResult}
+                  showRainfallLayer={showRainfallLayer}
+                  showRechargeLayer={showRechargeLayer}
+                  rainfallYear={selectedRainfallYear}
+                  clipApiBase={backendBase}
+                  industrialGeojson={wantsIndustrial ? industrialGeojson : null}
+                  gramPanchayatGeojson={wantsGramPanchayat ? gramPanchayatGeojson : null}
+                  populationGeojson={wantsPopulation ? populationGeojson : null}
+                  activeCriteria={[
+                    ...(wantsRiverFlow ? ["River flow"] : []),
+                    ...(wantsIndustrial ? ["Industrial discharge"] : []),
+                    ...(wantsGramPanchayat ? ["Gram Panchayat data"] : []),
+                    ...(wantsPopulation ? ["Population (urban/rural)"] : []),
+                    ...(wantsTributaryDrain ? ["Tributary & drain flow"] : []),
+                    ...(wantsChannelGeom ? ["Channel geometry (width, depth)"] : []),
+                    ...(wantsDemSlope ? ["DEM, slope maps"] : []),
+                    ...(wantsFlowDirection ? ["Surface flow direction & accumulation maps"] : []),
+                    ...(wantsGroundwaterQuality ? ["Groundwater quality"] : []),
+                    ...(wantsRiverWaterQuality ? ["River water quality"] : []),
+                    ...(wantsStp ? ["STP details"] : []),
+                    ...(wantsAgriculture   ? ["Agriculture (crop area, water demand)"] : []),
+                    ...(wantsIrrigation   ? ["Irrigation dependency"] : []),
+                    ...(wantsTourism      ? ["Tourism & cultural nodes"] : []),
+                    ...(wantsGhats        ? ["Ghats & heritage sites"] : []),
+                    ...(wantsEconomic     ? ["Economic activity zones"] : []),
+                    ...(wantsBaseline     ? ["All baseline datasets"] : []),
+                    ...(wantsGisData      ? ["Remote sensing + GIS maps"] : []),
+                    ...(wantsSwat         ? ["SWAT model outputs"] : []),
+                    ...(wantsHydrogeology ? ["Hydrogeology (aquifer, MAR, paleo-channels)"] : []),
+                    ...(wantsSensor       ? ["Monitoring stations & sensors"] : []),
+                    ...(wantsWetlands     ? ["Wetlands, ponds, lakes"] : []),
+                    ...(wantsRiparian     ? ["Riparian vegetation"] : []),
+                    ...(wantsBiodiversity ? ["Biodiversity (fish, birds, invasive species)"] : []),
+                    ...(wantsFloodplain   ? ["Floodplain & habitat data"] : []),
+                  ]}
+                  rwqSeason={rwqSeason}
+                  onStpDataLoaded={onStpDataLoaded}
+                  aviralTiff={showPhaseOnMap ? phaseTiff : null}
+                  basemap={basemap}
+                  onBasemapChange={setBasemap}
+                  borderless
+                  drawnShape={drawnShape}
+                  onDrawnShapeChange={onDrawnShapeChange}
+                  datasets={visibleDatasets}
+                  clipResults={clips}
+                  layersPanel={
+                    <MapLayersPanel
+                      baseLayers={baseLayers}
+                      onBaseLayersChange={setBaseLayers}
+                      visibleDatasets={visibleDatasets}
+                      onToggleDataset={toggleDataset}
+                      clips={clips}
+                      onRemoveClip={(id) => setClips((c) => c.filter((x) => x.id !== id))}
+                    />
+                  }
+                />
+        </main>
+
+        {/* ── right panel ── */}
+        {rightOpen ? (
+          <aside className="w-[400px] max-w-[45vw] shrink-0 overflow-y-auto border-l border-slate-200 bg-white">
+            <div className="p-4">
+              <div className="mb-3">
+                <h3 className="text-base font-bold text-slate-900">Outputs</h3>
+                <p className="text-xs text-slate-500">{STAGE_CONFIGS[stageIndex]?.title ?? `Stage ${stageIndex + 1}`}</p>
+              </div>
+              {!showOutputs ? (
+                <div className="mt-16 flex flex-col items-center px-6 text-center text-sm text-slate-500">
+                  <SlidersHorizontal className="mb-3 h-8 w-8 text-slate-300" />
+                  <p>Select zones and criteria in the left panel, then press <strong>Proceed</strong> to see the results here.</p>
+                  <p className="mt-2 text-xs text-slate-400">Uploaded data can be shown or clipped from the “Uploaded data” tab.</p>
                 </div>
+              ) : (
+              <>
                 <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <p>
                     <span className="font-semibold">Selected Zone(s):</span>{" "}
-                    {selectedZones.length ? selectedZones.join(", ") : "N/A"}
+                    {analysisZones.length ? zoneLabels(analysisZones).join(", ") : "N/A"}
                   </p>
                   <p className="mt-1">
                     <span className="font-semibold">Selected Inputs:</span> {snap.selectedDataUsed.length}
@@ -1591,10 +1662,11 @@ export default function HolisticModule({ hideLeftPanel = false }: HolisticModule
                     </div>
                   </div>
                 ) : null}
-              </div>
-            </aside>
-          ) : null}
-        </div>
+              </>
+              )}
+            </div>
+          </aside>
+        ) : null}
       </div>
     </div>
   );

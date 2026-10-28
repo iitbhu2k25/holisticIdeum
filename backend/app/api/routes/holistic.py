@@ -5,6 +5,8 @@ from app.api.schema.holistic_schema import (
     FlowDirectionClipRequest, CriteriaRequest, LayerClipRequest, RwqClipRequest, WeightedRasterRequest,
 )
 from app.api.service.holistic.location_service import Location_service
+from app.api.service.auth.auth_service import current_user_dependency
+from app.database.config.dependency import db_dependency
 from app.api.service.holistic.session_service import Phase_raster_service, Session_service
 from app.api.service.holistic.analysis_service import Analysis_service, Nirmal_service, Phase_analysis_service, TiffFile
 
@@ -147,23 +149,25 @@ def analysis_phase_raster(payload: WeightedRasterRequest):
 
 @router.post("/analysis/save-phase-raster")
 def save_phase_raster(
+    db: db_dependency,
+    user: current_user_dependency,
     tiff: UploadFile = File(...),
     stage_index: int = Form(0),
     stage_name: Optional[str] = Form(None),
     criteria: str = Form("[]"),
     weights: str = Form("{}"),
 ):
-    """Save a generated phase raster to media/temp so the /split page can read it."""
-    return Phase_raster_service.save(stage_index, stage_name, criteria, weights, tiff.file.read())
+    """Save a generated phase raster for the current user so the /split page can read it."""
+    return Phase_raster_service.save(db, user, stage_index, stage_name, criteria, weights, tiff.file.read())
 
 @router.get("/analysis/phase-raster-meta/{stage_index}")
-def phase_raster_meta(stage_index: int):
-    return Phase_raster_service.meta(stage_index)
+def phase_raster_meta(db: db_dependency, user: current_user_dependency, stage_index: int):
+    return Phase_raster_service.meta(db, user, stage_index)
 
 @router.get("/analysis/phase-raster-tiff/{stage_index}")
-def phase_raster_tiff(stage_index: int):
+def phase_raster_tiff(db: db_dependency, user: current_user_dependency, stage_index: int):
     return Response(
-        content=Phase_raster_service.tiff(stage_index),
+        content=Phase_raster_service.tiff(db, user, stage_index),
         media_type="image/tiff",
         headers={
             "Content-Disposition": f'inline; filename="phase_raster_{stage_index}.tif"',
@@ -172,15 +176,28 @@ def phase_raster_tiff(stage_index: int):
     )
 
 
-# ---------------- split sessions ----------------
+# ---------------- split sessions (per user) ----------------
 @router.post("/sessions/save")
-def session_save(data: dict = Body(...)):
-    return Session_service.save(data)
+def session_save(db: db_dependency, user: current_user_dependency, data: dict = Body(...)):
+    return Session_service.save(db, user, data)
 
 @router.get("/sessions/list")
-def session_list():
-    return Session_service.list()
+def session_list(db: db_dependency, user: current_user_dependency):
+    return Session_service.list(db, user)
+
+@router.get("/sessions/latest")
+def session_latest(db: db_dependency, user: current_user_dependency):
+    """Last workspace the user touched; /split restores it on open."""
+    return Session_service.latest(db, user)
+
+@router.get("/sessions/{session_id}")
+def session_get(db: db_dependency, user: current_user_dependency, session_id: str):
+    return Session_service.get(db, user, session_id)
+
+@router.patch("/sessions/{session_id}")
+def session_rename(db: db_dependency, user: current_user_dependency, session_id: str, title: str = Body(..., embed=True)):
+    return Session_service.rename(db, user, session_id, title)
 
 @router.delete("/sessions/delete/{session_id}")
-def session_delete(session_id: str):
-    return Session_service.delete(session_id)
+def session_delete(db: db_dependency, user: current_user_dependency, session_id: str):
+    return Session_service.delete(db, user, session_id)

@@ -1,4 +1,4 @@
-from app.database.config.session import sessions
+from app.database.config.session import sessions, SessionLocal
 import logging
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -21,7 +21,8 @@ class PostgresDb():
             self.session.remove()
             
     def get_session(self):
-        session = self.session()
+        # a fresh session per request: the thread-scoped registry is shared by concurrent requests
+        session = SessionLocal()
         try:
             yield session
         except Exception as e:

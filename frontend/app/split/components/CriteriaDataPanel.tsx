@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { savePhaseRaster } from "../../shared/phaseRasterClient";
 import {
   CartesianGrid, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -1111,14 +1112,8 @@ function CombinedWeightPanel({
       if (!res.ok) { setError("Generation failed"); return; }
       const buf = await res.arrayBuffer();
 
-      // Save meta to backend so other viewers can read it
-      const fd = new FormData();
-      fd.append("tiff", new Blob([buf], { type: "image/tiff" }), `phase_raster_${stageIndex}.tif`);
-      fd.append("stage_index", String(stageIndex));
-      fd.append("stage_name", activeModule);
-      fd.append("criteria", JSON.stringify(selected));
-      fd.append("weights", JSON.stringify(normalised));
-      await fetch(`${backendBase}/analysis/save-phase-raster`, { method: "POST", body: fd });
+      // Keep it so the other viewers can read it
+      await savePhaseRaster(stageIndex, activeModule, selected, normalised, buf);
 
       // Show only on this viewer's map — user must click "Show on Main Map" explicitly
       setLocalTiff(buf);

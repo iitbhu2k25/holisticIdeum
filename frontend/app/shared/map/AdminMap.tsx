@@ -1,58 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents, WMSTileLayer, ZoomControl } from "react-leaflet";
-import type { FeatureCollection, StickyNote, BasemapType } from "../../shared/types";
-import { BASEMAP_TILES } from "../../shared/types";
-import { RiverFlowWMSLayer, DrainFlowWMSLayer, ChannelGeometryWMSLayer } from "../../shared/map-layers/AviralFlowWMSLayers";
-import { ArthAgricultureLayer, ArthIrrigationLayer, ArthTourismLayer, ArthGhatsLayer, ArthEconomicLayer } from "../../shared/map-layers/ArthGangaRasterLayers";
-import { GyanBaselineLayer, GyanGisDataLayer, GyanSwatLayer, GyanHydrogeologyLayer, GyanSensorLayer } from "../../shared/map-layers/GyanGangaRasterLayers";
-import { JeevantWetlandsLayer, JeevantRiparianLayer, JeevantBiodiversityLayer, JeevantFloodplainLayer } from "../../shared/map-layers/JeevantGangaRasterLayers";
-import DemSlopeRasterLayer from "../../shared/map-layers/DemSlopeRasterLayer";
-import FlowDirectionRasterLayer from "../../shared/map-layers/FlowDirectionRasterLayer";
-import NirmalGwqLayer from "../../shared/map-layers/NirmalGwqLayer";
-import NirmalRwqLayer from "../../shared/map-layers/NirmalRwqLayer";
-import type { RwqSeason } from "../../shared/map-layers/NirmalRwqLayer";
-import StpPointLayer from "../../shared/map-layers/StpPointLayer";
+import { GeoJSON, useMap, useMapEvents, WMSTileLayer } from "react-leaflet";
+import type { FeatureCollection, StickyNote, BasemapType } from "../types";
+import { RiverFlowWMSLayer, DrainFlowWMSLayer, ChannelGeometryWMSLayer } from "../map-layers/AviralFlowWMSLayers";
+import { ArthAgricultureLayer, ArthIrrigationLayer, ArthTourismLayer, ArthGhatsLayer, ArthEconomicLayer } from "../map-layers/ArthGangaRasterLayers";
+import { GyanBaselineLayer, GyanGisDataLayer, GyanSwatLayer, GyanHydrogeologyLayer, GyanSensorLayer } from "../map-layers/GyanGangaRasterLayers";
+import { JeevantWetlandsLayer, JeevantRiparianLayer, JeevantBiodiversityLayer, JeevantFloodplainLayer } from "../map-layers/JeevantGangaRasterLayers";
+import DemSlopeRasterLayer from "../map-layers/DemSlopeRasterLayer";
+import FlowDirectionRasterLayer from "../map-layers/FlowDirectionRasterLayer";
+import NirmalGwqLayer from "../map-layers/NirmalGwqLayer";
+import NirmalRwqLayer from "../map-layers/NirmalRwqLayer";
+import type { RwqSeason } from "../map-layers/NirmalRwqLayer";
+import StpPointLayer from "../map-layers/StpPointLayer";
+import { GEOSERVER_URL } from "../config";
+import MapShell, { MapControls, MapTool, ALL_TOOLS } from "./MapShell";
+import type { DrawMode, DrawnShape } from "./DrawLayer";
+import DatasetLayer from "./DatasetLayer";
+import ClipResultLayer from "./ClipResultLayer";
+import type { ClipResult, Dataset } from "../services/datasetService";
 
-/* ── Forces Leaflet to re-measure the container after layout settles ── */
-function MapResizer() {
-  const map = useMap();
-  useEffect(() => {
-    const container = map.getContainer();
-    let lastW = container.offsetWidth;
-    let lastH = container.offsetHeight;
+// Re-exported so existing imports of BasemapType from this file still work
+export type { BasemapType } from "../types";
 
-    const invalidate = () => map.invalidateSize(false);
-
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const w = Math.round(entry.contentRect.width);
-      const h = Math.round(entry.contentRect.height);
-      if (w !== lastW || h !== lastH) {
-        lastW = w;
-        lastH = h;
-        invalidate();
-      }
-    });
-    ro.observe(container);
-
-    const t = setTimeout(invalidate, 100);
-
-    return () => {
-      clearTimeout(t);
-      ro.disconnect();
-    };
-  }, [map]);
-  return null;
-}
-
-// Re-exported from shared so existing imports of BasemapType/BASEMAP_TILES from this file still work
-export type { BasemapType } from "../../shared/types";
-export { BASEMAP_TILES } from "../../shared/types";
-
-const INDIA_CENTER: [number, number] = [22.5937, 78.9629];
-const INDIA_ZOOM = 5;
 const RAINFALL_CLASS_COLORS = {
   c0: "rgba(0, 248, 33, 0.72)", // <900
   c1: "rgba(37,99,235,0.72)", // 900-1000
@@ -206,10 +175,7 @@ function FitMapToGeoJSON({ data }: { data: FeatureCollection | null }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!data?.features?.length) {
-      map.setView(INDIA_CENTER, INDIA_ZOOM);
-      return;
-    }
+    if (!data?.features?.length) return; // MapShell starts on India
     const layer = L.geoJSON(data as any);
     const bounds = layer.getBounds();
     if (bounds.isValid()) {
@@ -564,6 +530,19 @@ type Props = {
   stpWmsLayers?: { url: string; layers: string }[];
   stpAreaWmsLayers?: { url: string; layers: string }[];
   aviralTiff?: ArrayBuffer | null;
+  onBasemapChange?: (basemap: BasemapType) => void;
+  /** Map controls; defaults to the full rail when interactive. */
+  tools?: MapTool[] | false;
+  drawnShape?: DrawnShape | null;
+  onDrawnShapeChange?: (shape: DrawnShape | null) => void;
+  /** Uploaded datasets switched on in the catalog. */
+  datasets?: Dataset[];
+  clipResults?: { id: string; title: string; result: ClipResult }[];
+  layersPanel?: React.ReactNode;
+  drawMode?: DrawMode;
+  onDrawModeChange?: (mode: DrawMode) => void;
+  onControls?: (controls: MapControls) => void;
+  children?: React.ReactNode;
 };
 
 export default function AdminMap({
@@ -604,8 +583,18 @@ export default function AdminMap({
   stpWmsLayers = [],
   stpAreaWmsLayers = [],
   aviralTiff = null,
+  onBasemapChange,
+  tools,
+  drawnShape = null,
+  onDrawnShapeChange,
+  datasets = [],
+  clipResults = [],
+  layersPanel,
+  drawMode,
+  onDrawModeChange,
+  onControls,
+  children,
 }: Props) {
-  const tileConfig = basemap ? BASEMAP_TILES[basemap] : BASEMAP_TILES.streets;
 
   /* Fetch industrial discharge GeoJSON when criterion is active */
   const [internalIndustrialGeojson, setInternalIndustrialGeojson] = useState<any>(null);
@@ -875,47 +864,28 @@ export default function AdminMap({
     }
   };
 
-  const rootStyle = borderless
-    ? ({
-      position: "absolute",
-      inset: 0,
-      width: "100%",
-      height: "100%",
-      minHeight: "100%",
-      maxHeight: "100%",
-    } as const)
-    : undefined;
-
   return (
     <section
-      className={`relative h-full overflow-hidden ${borderless ? '' : 'rounded-xl border-4 border-emerald-500 shadow'} bg-white`}
-      style={rootStyle}
+      className={`relative h-full overflow-hidden bg-white ${borderless ? "absolute inset-0" : "rounded-xl border border-slate-200 shadow-sm"}`}
     >
-      <MapContainer
-        center={INDIA_CENTER}
-        zoom={INDIA_ZOOM}
-        className="h-full w-full"
-        style={{ width: "100%", height: "100%", minHeight: "100%", maxHeight: "100%" }}
-        zoomControl={false}
-        dragging={interactive}
-        touchZoom={interactive}
-        scrollWheelZoom={interactive}
-        doubleClickZoom={interactive}
-        boxZoom={interactive}
-        keyboard={interactive}
+      <MapShell
+        basemap={basemap ?? "streets"}
+        onBasemapChange={onBasemapChange}
+        showBasemap={showBasemap}
+        interactive={interactive}
+        tools={interactive ? tools ?? ALL_TOOLS : false}
+        homeExtent={(selectedZoneGeojson || areaGeojson || basinGeojson) as any}
+        drawnShape={drawnShape}
+        onDrawnShapeChange={onDrawnShapeChange}
+        layersPanel={layersPanel}
+        drawMode={drawMode}
+        onDrawModeChange={onDrawModeChange}
+        onControls={onControls}
       >
-        <MapResizer />
-        {showBasemap ? (
-          <TileLayer
-            key={basemap || "streets"}
-            attribution={tileConfig.attribution}
-            url={tileConfig.url}
-          />
-        ) : null}
         {showRechargeLayer ? (
           <WMSTileLayer
             key="recharge-gw-wms"
-            url="http://localhost:9090/geoserver/dss_raster/wms"
+            url={`${GEOSERVER_URL}/dss_raster/wms`}
             params={{
               layers: "dss_raster:recharge_gw",
               format: "image/png",
@@ -1099,7 +1069,6 @@ export default function AdminMap({
         <JeevantFloodplainLayer enabled={activeCriteria.includes("Floodplain & habitat data")} selectedZones={selectedZones} clipApiBase={clipApiBase} />
         <RainfallRasterLayer enabled={showRainfallLayer} selectedZones={selectedZones} rainfallYear={rainfallYear} clipApiBase={clipApiBase} />
         <AviralRasterLayer tiff={aviralTiff} />
-        {interactive ? <ZoomControl position="topright" /> : null}
         {basinGeojson ? <GeoJSON key="basin-boundary" data={basinGeojson as any} style={basinStyle as any} /> : null}
         {riversGroup1 ? <GeoJSON key="rivers-group-1" data={riversGroup1 as any} style={riverStyle1 as any} /> : null}
         {riversGroup2 ? <GeoJSON key="rivers-group-2" data={riversGroup2 as any} style={riverStyle2 as any} /> : null}
@@ -1125,7 +1094,10 @@ export default function AdminMap({
         <StickyMapClickHandler enabled={stickyMode} onMapClick={onStickyMapClick} />
         <FitMapToGeoJSON data={selectedZoneGeojson || areaGeojson || basinGeojson} />
         <MapViewBroadcaster onViewChange={onViewChange} />
-      </MapContainer>
+        {datasets.map((ds) => <DatasetLayer key={`dataset-${ds.id}`} dataset={ds} clipZones={selectedZones} />)}
+        {clipResults.map((c) => <ClipResultLayer key={c.id} result={c.result} title={c.title} />)}
+        {children}
+      </MapShell>
     </section>
   );
 }

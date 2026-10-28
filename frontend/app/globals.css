@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /* ── Fullscreen mode: hide shell chrome ── */
-body.holistic-fullscreen-mode nav,
-body.holistic-fullscreen-mode header,
-body.holistic-fullscreen-mode footer {
+body.holistic-fullscreen-mode > nav,
+body.holistic-fullscreen-mode > header,
+body.holistic-fullscreen-mode > footer {
   display: none !important;
 }
 
@@ -13,7 +13,7 @@ body.holistic-fullscreen-mode #app-footer {
   display: none !important;
 }
 
-body.holistic-fullscreen-mode main {
+body.holistic-fullscreen-mode > main {
   margin: 0 !important;
   padding: 0 !important;
   height: 100dvh !important;
@@ -25,7 +25,7 @@ body.holistic-fullscreen-mode main {
   overflow: hidden !important;
 }
 
-body.holistic-fullscreen-mode main > div,
+body.holistic-fullscreen-mode > main > div,
 body.holistic-fullscreen-mode [data-nextjs-scroll-focus-boundary] {
   height: 100dvh !important;
   max-height: 100dvh !important;
@@ -51,7 +51,7 @@ body.holistic-fullscreen-mode > * {
   padding: 0 !important;
 }
 
-body.holistic-fullscreen-mode .flex-col {
+body.holistic-fullscreen-mode > .flex-col {
   padding: 0 !important;
   margin: 0 !important;
 }

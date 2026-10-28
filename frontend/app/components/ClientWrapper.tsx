@@ -8,6 +8,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
     // The Dashboard is at /dashboard
     const isHomePage =
         pathname === '/' ||
+        pathname === '/homepage' ||
         pathname === '/dss/holistic' ||
         pathname === '/holistic' ||
         pathname?.startsWith('/split');

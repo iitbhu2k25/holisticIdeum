@@ -9,3 +9,9 @@ from app.database.models.model_assivardash import (
     River_WorkflowPhase,
     Fund_Department,
 )
+from app.database.models.model_user import (
+    User,
+    User_Session,
+    User_Phase_Raster,
+)
+from app.database.models.model_dataset import Dataset

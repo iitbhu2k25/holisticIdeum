@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { loadPhaseMeta, loadPhaseTiff } from "../../shared/phaseRasterClient";
 import type { BasemapType, StickyNote } from "../../shared/types";
+
+type CombinedMeta = { stage_name: string; criteria: string[]; weights: Record<string, number>; generated_at: number } | null;
 
 type SplitMasterPanelProps = {
   visibleScreens: Record<string, boolean>;
@@ -46,6 +49,14 @@ type SplitMasterPanelProps = {
   onActiveModuleChange: (module: "Aviral Ganga" | "Nirmal Ganga" | "Jan Ganga" | "Arth Ganga" | "Gyan Ganga" | "Jeevant Ganga" | "STP Suitability") => void;
   onResetAllSTP?: () => void;
   onActiveCombinedMetaChange?: (meta: CombinedMeta) => void;
+  /** Session + map controls, shown as the first row of the panel. */
+  toolbar?: React.ReactNode;
+  /** a polygon drawn on the map also counts as an analysis area */
+  hasDrawnArea?: boolean;
+  /** Datasets uploaded for the active module's category, listed with the criteria. */
+  uploadedDatasets?: { id: number; title: string }[];
+  visibleDatasetIds?: number[];
+  onToggleDataset?: (id: number) => void;
 };
 
 const basemapOptions: { key: BasemapType; label: string; icon: string }[] = [
@@ -103,12 +114,29 @@ export default function SplitMasterPanel({
   onActiveModuleChange,
   onResetAllSTP,
   onActiveCombinedMetaChange,
+  toolbar,
+  hasDrawnArea = false,
+  uploadedDatasets = [],
+  visibleDatasetIds = [],
+  onToggleDataset,
 }: SplitMasterPanelProps) {
   const [showScreensDropdown, setShowScreensDropdown] = useState(false);
   const [showViewerSize, setShowViewerSize] = useState(false);
   const [showBasemapOptions, setShowBasemapOptions] = useState(true);
   const [showZoneDropdown, setShowZoneDropdown] = useState(false);
   const zoneDropdownRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarOffset, setToolbarOffset] = useState(2);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    // body padding-top (10) + toolbar row + its bottom margin (8)
+    const update = () => setToolbarOffset(10 + el.offsetHeight + 8);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [!!toolbar, collapsed]);
 
   // Close zone dropdown when clicking outside
   useEffect(() => {
@@ -175,7 +203,6 @@ export default function SplitMasterPanel({
   const COMBINED_LABEL = "Combined Output";
   const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9000";
 
-  type CombinedMeta = { stage_name: string; criteria: string[]; weights: Record<string, number>; generated_at: number } | null;
   const [combinedMeta, setCombinedMeta] = useState<CombinedMeta>(null);
   const [nirmalCombinedMeta, setNirmalCombinedMeta] = useState<CombinedMeta>(null);
   const [janCombinedMeta, setJanCombinedMeta] = useState<CombinedMeta>(null);
@@ -207,8 +234,7 @@ export default function SplitMasterPanel({
     const genRefs = [aviralGenRef, nirmalGenRef, janGenRef, arthGenRef, gyanGenRef, jeevantGenRef];
     const setters = [setCombinedMeta, setNirmalCombinedMeta, setJanCombinedMeta, setArthCombinedMeta, setGyanCombinedMeta, setJeevantCombinedMeta];
     const load = () => {
-      fetch(`${BACKEND}/analysis/phase-raster-meta/${stageIndex}`)
-        .then((r) => (r.ok ? r.json() : null))
+      loadPhaseMeta(stageIndex)
         .then((d) => {
           if (cancelled) return;
           const meta = d as CombinedMeta;
@@ -238,19 +264,11 @@ export default function SplitMasterPanel({
     if (!tiffCallback) return;
     let meta = existingMeta;
     if (!meta) {
-      try {
-        const r = await fetch(`${BACKEND}/analysis/phase-raster-meta/${stageIndex}`);
-        if (r.ok) {
-          meta = await r.json();
-          if (meta) { metaSetter(meta); onActiveCombinedMetaChange?.(meta); }
-        }
-      } catch { /* ignore */ }
+      meta = await loadPhaseMeta(stageIndex);
+      if (meta) { metaSetter(meta); onActiveCombinedMetaChange?.(meta); }
     }
     if (!meta) { return; } // no saved raster for this stage
-    try {
-      const r = await fetch(`${BACKEND}/analysis/phase-raster-tiff/${stageIndex}`);
-      tiffCallback(r.ok ? await r.arrayBuffer() : null);
-    } catch { tiffCallback(null); }
+    tiffCallback(await loadPhaseTiff(stageIndex));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onActiveCombinedMetaChange]);
 
@@ -401,12 +419,30 @@ export default function SplitMasterPanel({
     };
   }, []);
 
+  // uploaded datasets appear under every module's criteria; ticking one shows it clipped to the area
+  const uploadedCriteria = uploadedDatasets.length ? (
+    <div style={{ marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(251,191,36,0.25)", display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#fbbf24aa" }}>Uploaded data</span>
+      {uploadedDatasets.map((ds) => (
+        <label key={ds.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={visibleDatasetIds.includes(ds.id)}
+            onChange={() => onToggleDataset?.(ds.id)}
+            style={{ accentColor: "#fbbf24", width: 10, height: 10, flexShrink: 0, marginTop: 1 }}
+          />
+          <span style={{ fontSize: 9, color: "#fde68a", lineHeight: 1.3 }}>{ds.title}</span>
+        </label>
+      ))}
+    </div>
+  ) : null;
+
   return (
     <div
       ref={panelRef}
       className="split-master-panel pointer-events-auto absolute bottom-4 left-1/2 z-[940]"
       style={{
-        width: collapsed ? "auto" : "min(460px, 62vw)",
+        width: collapsed ? "auto" : toolbar ? "min(540px, 92vw)" : "min(460px, 62vw)",
         transform: `translateX(calc(-50% + ${offsetX}px))`,
         transition: "width 0.4s ease",
         cursor: mouseDragging.current ? "grabbing" : "grab",
@@ -468,8 +504,12 @@ export default function SplitMasterPanel({
           position: "relative",
         }}
       >
-        {/* Right column — Zone selector + Modules + Criteria, absolutely positioned */}
-        <div className="absolute top-0.5 right-4 flex flex-col items-end gap-2" style={{ maxWidth: activeModule === "Aviral Ganga" ? 260 : activeModule === "Nirmal Ganga" ? 260 : activeModule === "Jan Ganga" ? 260 : activeModule === "Arth Ganga" ? 260 : activeModule === "Gyan Ganga" ? 260 : activeModule === "Jeevant Ganga" ? 260 : activeModule === "STP Suitability" ? 160 : 140 }}>
+        {toolbar ? (
+          <div ref={toolbarRef} className="mb-2 border-b border-white/10 pb-2">{toolbar}</div>
+        ) : null}
+
+        {/* Right column — Zone selector + Modules + Criteria, absolutely positioned (below the toolbar row) */}
+        <div className="absolute right-4 flex flex-col items-end gap-2" style={{ top: toolbarOffset, maxWidth: activeModule === "Aviral Ganga" ? 260 : activeModule === "Nirmal Ganga" ? 260 : activeModule === "Jan Ganga" ? 260 : activeModule === "Arth Ganga" ? 260 : activeModule === "Gyan Ganga" ? 260 : activeModule === "Jeevant Ganga" ? 260 : activeModule === "STP Suitability" ? 160 : 140 }}>
 
           {/* ── Zone selector ── */}
           <div className="w-full" ref={zoneDropdownRef}>
@@ -484,7 +524,7 @@ export default function SplitMasterPanel({
                 borderRadius: 7, padding: "4px 8px", fontSize: 10, color: "#cbd5e1", cursor: "pointer",
               }}
             >
-              <span>{selectedZones.length > 0 ? `${selectedZones.length} zone${selectedZones.length > 1 ? "s" : ""} selected` : "Select zones"}</span>
+              <span>{selectedZones.length > 0 ? `${selectedZones.length} zone${selectedZones.length > 1 ? "s" : ""} selected${hasDrawnArea ? " + drawn area" : ""}` : hasDrawnArea ? "Drawn area (add zones to narrow)" : "Select zones"}</span>
               <span style={{ fontSize: 8, opacity: 0.7 }}>{showZoneDropdown ? "▲" : "▼"}</span>
             </button>
 
@@ -539,12 +579,12 @@ export default function SplitMasterPanel({
             {activeModule === "Aviral Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#60a5fa99" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(96,165,250,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {AVIRAL_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -562,6 +602,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {combinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(96,165,250,0.2)" }}>
                         <input
@@ -592,12 +633,12 @@ export default function SplitMasterPanel({
             {activeModule === "Nirmal Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#a78bfa99" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(167,139,250,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {NIRMAL_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -615,6 +656,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {nirmalCombinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(167,139,250,0.2)" }}>
                         <input
@@ -645,12 +687,12 @@ export default function SplitMasterPanel({
             {activeModule === "Jan Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#34d39999" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(52,211,153,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {JAN_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -668,6 +710,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {janCombinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(52,211,153,0.2)" }}>
                         <input
@@ -698,12 +741,12 @@ export default function SplitMasterPanel({
             {activeModule === "Arth Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#fb923c99" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(251,146,60,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(251,146,60,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(251,146,60,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {ARTH_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -721,6 +764,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {arthCombinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(251,146,60,0.2)" }}>
                         <input
@@ -751,12 +795,12 @@ export default function SplitMasterPanel({
             {activeModule === "Gyan Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#22d3ee99" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {GYAN_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -774,6 +818,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {gyanCombinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(34,211,238,0.2)" }}>
                         <input
@@ -804,12 +849,12 @@ export default function SplitMasterPanel({
             {activeModule === "Jeevant Ganga" && (
               <div style={{ flexShrink: 1, minWidth: 0, maxWidth: 130 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#4ade8099" }}>Criteria</p>
-                {selectedZones.length === 0 ? (
+                {selectedZones.length === 0 && !hasDrawnArea ? (
                   <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(74,222,128,0.15)", borderRadius: 7, padding: "7px 10px" }}>
                     <span style={{ fontSize: 9, color: "#64748b", fontStyle: "italic" }}>Select zones first</span>
                   </div>
                 ) : (
-                  <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div className="split-modules-scroll" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 7, padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 130, overflowY: "auto" }}>
                     {JEEVANT_CRITERIA.map((criterion) => (
                       <label key={criterion} style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer" }}>
                         <input
@@ -827,6 +872,7 @@ export default function SplitMasterPanel({
                         <span style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.3 }}>{criterion}</span>
                       </label>
                     ))}
+                    {uploadedCriteria}
                     {jeevantCombinedMeta && (
                       <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", marginTop: 3, paddingTop: 3, borderTop: "1px solid rgba(74,222,128,0.2)" }}>
                         <input

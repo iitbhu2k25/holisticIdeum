@@ -21,6 +21,8 @@ type Props = {
   onPrevious: () => void;
   onGeneratePdf?: () => void;
   selectedZones: string[];
+  /** a polygon drawn on the map also counts as an analysis area */
+  hasDrawnArea?: boolean;
   zoneOptions: ZoneOption[];
   displayedZones: number;
   onZoneChange: (values: string[]) => Promise<void>;
@@ -51,6 +53,7 @@ export default function AdminLocation({
   onPrevious,
   onGeneratePdf,
   selectedZones,
+  hasDrawnArea = false,
   zoneOptions,
   displayedZones,
   onZoneChange,
@@ -102,7 +105,7 @@ export default function AdminLocation({
   const displayCount = STAGE_CONFIGS.length;
 
   return (
-    <section className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="flex h-full w-full flex-col overflow-hidden bg-white p-4">
       {/* Header */}
       <div className="mb-3 flex items-center rounded-lg bg-slate-100 px-3 py-2">
         <div className="flex flex-1 justify-center">
@@ -408,12 +411,12 @@ export default function AdminLocation({
                       <button
                         type="button"
                         onClick={onGenerateSuitability}
-                        disabled={suitabilityLoading || selectedZones.length === 0}
+                        disabled={suitabilityLoading || (selectedZones.length === 0 && !hasDrawnArea)}
                         style={{
                           width: "100%", padding: "9px 0", fontSize: 13, fontWeight: 700, borderRadius: 8,
-                          background: suitabilityLoading || !selectedZones.length ? "#cbd5e1" : "#0369a1",
+                          background: suitabilityLoading || (!selectedZones.length && !hasDrawnArea) ? "#cbd5e1" : "#0369a1",
                           color: "#fff", border: "none", cursor: suitabilityLoading ? "wait" : "pointer",
-                          boxShadow: suitabilityLoading || !selectedZones.length ? "none" : "0 2px 8px rgba(3,105,161,0.25)",
+                          boxShadow: suitabilityLoading || (!selectedZones.length && !hasDrawnArea) ? "none" : "0 2px 8px rgba(3,105,161,0.25)",
                         }}
                       >
                         {suitabilityLoading ? "Generating…" : "Generate"}

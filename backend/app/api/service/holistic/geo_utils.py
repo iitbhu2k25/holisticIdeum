@@ -1,4 +1,5 @@
 """Shared GeoServer / raster helpers for the holistic analysis services."""
+import json
 import os
 import re
 from functools import wraps
@@ -19,6 +20,11 @@ from app.conf.settings import Settings
 
 MEDIA_DIR = Path(Settings().MEDIA_DIR)
 
+# A polygon drawn on the map travels in selected_zones as "DRAWN AREA::<geojson>", so every
+# zone-based analysis/clip also works on (or is narrowed by) the user's own area.
+DRAWN_AREA = "DRAWN AREA"
+DRAWN_PREFIX = f"{DRAWN_AREA}::"
+
 
 def handle_errors(label: str):
     """Map GeoServer failures to 502 and anything else to 500, like the old Django views did."""
@@ -35,6 +41,44 @@ def handle_errors(label: str):
                 raise JsonError(500, detail=f"{label} failed: {exc}")
         return wrapper
     return decorator
+
+
+def polygon_from_geojson(obj: dict):
+    """Polygonal shapely geometry from a GeoJSON geometry, Feature or FeatureCollection."""
+    if obj.get("type") == "FeatureCollection":
+        geom = unary_union([shape(f["geometry"]) for f in obj.get("features", []) if f.get("geometry")])
+    elif obj.get("type") == "Feature":
+        geom = shape(obj["geometry"])
+    else:
+        geom = shape(obj)
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+    if geom.geom_type == "GeometryCollection":
+        geom = unary_union([g for g in geom.geoms if g.geom_type in ("Polygon", "MultiPolygon")])
+    if geom.is_empty or geom.geom_type not in ("Polygon", "MultiPolygon"):
+        raise JsonError(400, detail="The drawn area must be a polygon")
+    return geom
+
+
+def split_drawn_area(selected_zones: list) -> tuple[list, object | None]:
+    """(zone names, drawn polygon or None) from a selected_zones list."""
+    names, drawn = [], []
+    for z in selected_zones:
+        text = str(z)
+        if text.startswith(DRAWN_PREFIX):
+            try:
+                drawn.append(polygon_from_geojson(json.loads(text[len(DRAWN_PREFIX):])))
+            except (ValueError, KeyError, TypeError):
+                raise JsonError(400, detail="Could not read the drawn area")
+        elif text.strip():
+            names.append(z)
+    return names, (unary_union(drawn) if drawn else None)
+
+
+def _polygonal(geom):
+    if geom.geom_type == "GeometryCollection":
+        geom = unary_union([g for g in geom.geoms if g.geom_type in ("Polygon", "MultiPolygon")])
+    return geom
 
 
 def require_zones(selected_zones: list) -> list:
@@ -216,7 +260,32 @@ def normalize_zone_value(value) -> str:
 
 
 def resolve_zone_geometries(selected_zones: list[str]) -> tuple[dict[str, list[dict]], str]:
-    """Return ({ZONE_NAME: [geojson geometries]}, zone_field) for the selected zones of the Area layer."""
+    """Return ({ZONE_NAME: [geojson geometries]}, zone_field) for the selected zones of the Area layer.
+
+    A drawn area on its own is returned as {"DRAWN AREA": [polygon]}; together with zones it
+    narrows each zone to its overlap with the drawing.
+    """
+    selected_zones, drawn = split_drawn_area(selected_zones)
+    if not selected_zones:
+        if drawn is None:
+            raise JsonError(400, detail="selected_zones is required")
+        return {DRAWN_AREA: [mapping(drawn)]}, "drawn_area"
+
+    zone_geometries, zone_field = _area_zone_geometries(selected_zones)
+    if drawn is None:
+        return zone_geometries, zone_field
+
+    narrowed = {}
+    for name, geoms in zone_geometries.items():
+        part = _polygonal(unary_union([shape(g) for g in geoms]).intersection(drawn))
+        if not part.is_empty:
+            narrowed[name] = [mapping(part)]
+    if not narrowed:
+        raise JsonError(400, detail="The drawn area does not overlap the selected zones")
+    return narrowed, zone_field
+
+
+def _area_zone_geometries(selected_zones: list[str]) -> tuple[dict[str, list[dict]], str]:
     area_geojson = fetch_area_geojson()
     features = area_geojson.get("features", []) or []
     zone_field = _guess_zone_field(features)

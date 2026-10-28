@@ -1,202 +1,130 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Droplets, TrendingUp, Activity, Database, MapPin, Factory, Waves } from 'lucide-react';
+import {
+  Activity, ArrowRight, Columns2, Database, Droplets, Factory, Layers, MapPin, MousePointerClick, Save, Waves,
+} from 'lucide-react';
+import { DATASET_CATEGORIES } from '../../shared/config';
 
-const HomePage = () => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+const PILLARS: Record<string, { text: string; href: string }> = {
+  aviral: { text: 'River flow, rainfall, groundwater recharge and terrain.', href: '/aviral-ganga/river-discharge-assessment' },
+  nirmal: { text: 'Water quality, sewage load, STPs and industrial discharge.', href: '/nirmal-ganga/river-water-quality' },
+  jan: { text: 'Population, gram panchayats and community participation.', href: '/jan-ganga/social-attachment-and-impact' },
+  arth: { text: 'Agriculture, irrigation, tourism and river economy.', href: '/arth-ganga/river-based-economic-linkages' },
+  gyan: { text: 'Baseline data, remote sensing, models and monitoring.', href: '/gyan-ganga/river-vulnerability-and-interventions' },
+  jeevant: { text: 'Wetlands, riparian buffers and biodiversity.', href: '/jeevant-ganga/biodiversity-ecological-indicators' },
+};
 
-  const heroImages = [
-    { src: '/image_9.jpeg', alt: 'Varuna River', title: 'Varuna River' },
-    { src: '/river3.png', alt: 'Assi River', title: 'Assi River' },
-    { src: '/RHAR.jpg', alt: 'RHAR', title: 'Ganga River' },
-  ];
+const DATA_LINKS = [
+  { title: 'River stretches', icon: Waves, href: '/nirmal-ganga/river-stretches-information', image: '/river1.png' },
+  { title: 'Water quality', icon: Droplets, href: '/nirmal-ganga/river-water-quality', image: '/image_11.jpeg' },
+  { title: 'Discharge', icon: Activity, href: '/aviral-ganga/river-discharge-assessment', image: '/river7.png' },
+  { title: 'Sewage load', icon: MapPin, href: '/nirmal-ganga/sewage-load-estimation', image: '/river2.png' },
+  { title: 'STP status', icon: Factory, href: '/nirmal-ganga/stp-status-and-sewage-gap', image: '/image_9.jpeg' },
+  { title: 'Dashboard', icon: Database, href: '/dashboard', image: '/dash.png' },
+];
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % heroImages.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
+const STEPS = [
+  { icon: MousePointerClick, title: 'Pick your area', text: 'Select zones, or draw a polygon on the map.' },
+  { icon: Layers, title: 'Add data', text: 'Choose criteria and uploaded datasets; everything is clipped to your area.' },
+  { icon: Save, title: 'Compare & save', text: 'Compare side by side in Split view. Sign in to keep your sessions.' },
+];
 
-  const dataAccessSections = [
-    {
-      title: 'River Stretches',
-      description: 'Physical river characteristics and morphological changes across the basin.',
-      icon: Waves,
-      href: '/nirmal-ganga/river-stretches-information',
-      color: 'bg-blue-600',
-      image: '/river1.png'
-    },
-    {
-      title: 'Water Quality',
-      description: 'Real-time monitoring of DO, BOD, and pH levels across sampling stations.',
-      icon: Droplets,
-      href: '/nirmal-ganga/river-water-quality',
-      color: 'bg-cyan-500',
-      image: '/image_11.jpeg'
-    },
-    {
-      title: 'Discharge Data',
-      description: 'Historical and live flow measurements tracking seasonal discharge trends.',
-      icon: Activity,
-      href: '/aviral-ganga/river-discharge-assessment',
-      color: 'bg-green-500',
-      image: '/river7.png'
-    },
-    {
-      title: 'Sewage Load',
-      description: 'Geospatial inventory of ponds including restoration and health status.',
-      icon: MapPin,
-      href: '/nirmal-ganga/sewage-load-estimation',
-      color: 'bg-purple-600',
-      image: '/river2.png'
-    },
-    {
-      title: 'STP',
-      description: 'Mapping of industrial clusters and effluent discharge compliance tracking.',
-      icon: Factory,
-      href: '/nirmal-ganga/stp-status-and-sewage-gap',
-      color: 'bg-orange-500',
-      image: '/image_9.jpeg'
-    },
-    {
-      title: 'Dashboard',
-      description: 'Consolidated analytical views of river health KPI performance and trends.',
-      icon: Database,
-      href: '/dashboard',
-      color: 'bg-indigo-600',
-      image: '/dash.png'
-    },
-  ];
-
+export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <section className="relative min-h-[1000px] lg:h-screen flex items-center overflow-hidden py-20">
-        {heroImages.map((image, index) => (
-          <div
-            key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
-          >
-            <img src={image.src} alt={image.alt} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-blue-950/60" />
-          </div>
-        ))}
-
-        <div className="relative z-10 w-full h-full">
-          <div className="container mx-auto px-6 h-full flex flex-col justify-between">
-
-            {/* Top Center: Heading and Subtext */}
-            <div className="text-center text-white mt-10">
-              <h1 className="text-7xl md:text-8xl font-black mb-4 leading-tight tracking-tight">
-                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-indigo-300"> Holistic River Management</span>
-              </h1>
-              <p className="text-lg md:text-xl leading-relaxed text-blue-50/90 font-medium max-w-3xl mx-auto">
-                Protecting our river ecosystems through integrated management and data-driven interventions.
-              </p>
-            </div>
-
-            {/* Middle Center: Cards Section */}
-            <div className="mt-62 mb-12">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-7xl mx-auto">
-                {dataAccessSections.map((section, index) => {
-                  const Icon = section.icon;
-                  return (
-                    <Link
-                      key={index}
-                      href={section.href}
-                      className="group bg-white border border-slate-800 rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl flex flex-col h-[240px]"
-                    >
-                      <div className="relative h-[140px] overflow-hidden">
-                        <img
-                          src={section.image}
-                          alt={section.title}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
-                        />
-                        <div className={`absolute bottom-2 left-2 w-7 h-7 rounded-lg ${section.color} flex items-center justify-center text-white shadow-lg z-10`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                      </div>
-
-                      <div className="p-3 flex flex-col justify-start">
-                        <h3 className="text-[13px] font-bold text-slate-900 leading-tight mb-1 group-hover:text-blue-600">
-                          {section.title}
-                        </h3>
-                        <p className="text-[10px] leading-snug text-slate-600 line-clamp-3">
-                          {section.description}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bottom: Buttons (Bottom Left and Bottom Right) */}
-            <div className="flex justify-between items-end pb-10">
-              <Link href="/about/overview" className="px-8 py-4 bg-slate-300 text-blue-900 font-bold rounded-xl hover:bg-blue-50 transition-all shadow-xl">
-                Learn more
-              </Link>
-              <Link href="/data-access" className="px-8 py-4 bg-blue-400 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-xl">
-                Access Data from App
-              </Link>
-            </div>
-
+    <div className="bg-white">
+      {/* ── hero ── */}
+      <section className="relative isolate overflow-hidden">
+        <img src="/river3.png" alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-900/70 to-slate-900/20" />
+        <div className="mx-auto flex min-h-[520px] max-w-6xl flex-col justify-center px-6 py-20">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">Smart Laboratory on Clean Rivers</p>
+          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-white md:text-6xl">
+            Holistic River Management
+          </h1>
+          <p className="mt-4 max-w-xl text-lg text-slate-200">
+            One map for river health: flow, water quality, people, economy, knowledge and ecology, analysed zone by zone.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/holistic" className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white shadow-lg hover:bg-sky-400">
+              Open Holistic module <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/split" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 font-semibold text-white ring-1 ring-white/30 backdrop-blur hover:bg-white/20">
+              <Columns2 className="h-4 w-4" /> Split view
+            </Link>
           </div>
         </div>
+      </section>
 
-        {/* Carousel Indicators */}
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 z-20">
-          {heroImages.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentImageIndex(index)}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentImageIndex ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/75'}`}
-            />
+      {/* ── six pillars ── */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mb-8 max-w-2xl">
+          <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">Six pillars, one river</h2>
+          <p className="mt-2 text-slate-600">Each pillar has its own criteria and data. Open one to explore, or bring them together in the Holistic module.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {DATASET_CATEGORIES.map((c) => (
+            <Link
+              key={c.key}
+              href={PILLARS[c.key].href}
+              className="group flex items-start gap-4 rounded-2xl border border-slate-200 p-5 transition hover:-translate-y-0.5 hover:border-transparent hover:shadow-lg"
+            >
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" style={{ background: c.color }}>
+                {c.stageIndex + 1}
+              </span>
+              <span>
+                <span className="flex items-center gap-1 font-semibold text-slate-900">
+                  {c.label}
+                  <ArrowRight className="h-4 w-4 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" style={{ color: c.color }} />
+                </span>
+                <span className="mt-1 block text-sm text-slate-600">{PILLARS[c.key].text}</span>
+              </span>
+            </Link>
           ))}
         </div>
       </section>
 
-      {/* Mission Section */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl font-black text-blue-900 mb-8">
-              Our Mission
-            </h2>
-            <p className="text-xl text-gray-700 leading-relaxed mb-12">
-              The Holistic River Management System integrates multiple aspects of river conservation,
-              including water quality monitoring, discharge management, sewage treatment, and ecosystem restoration.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
-              <div className="p-8 bg-blue-50 rounded-2xl border border-blue-100">
-                <div className="text-blue-600 mb-6">
-                  <TrendingUp className="w-14 h-14 mx-auto" />
+      {/* ── how it works ── */}
+      <section className="bg-slate-50">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <h2 className="mb-8 text-2xl font-bold text-slate-900 md:text-3xl">How it works</h2>
+          <ol className="grid gap-6 md:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-700"><s.icon className="h-4 w-4" /></span>
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Step {i + 1}</span>
                 </div>
-                <h3 className="text-2xl font-bold text-blue-900 mb-3">Data-Driven</h3>
-                <p className="text-gray-600 text-sm">Evidence-based decision making through comprehensive data collection.</p>
+                <p className="font-semibold text-slate-900">{s.title}</p>
+                <p className="mt-1 text-sm text-slate-600">{s.text}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* ── quick data links ── */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">Explore the data</h2>
+          <Link href="/data-access" className="inline-flex items-center gap-1 text-sm font-semibold text-sky-700 hover:text-sky-900">
+            All data access <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+          {DATA_LINKS.map((d) => (
+            <Link key={d.title} href={d.href} className="group overflow-hidden rounded-2xl border border-slate-200 transition hover:shadow-lg">
+              <div className="h-24 overflow-hidden bg-slate-100">
+                <img src={d.image} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
               </div>
-              <div className="p-8 bg-green-50 rounded-2xl border border-green-100">
-                <div className="text-green-600 mb-6">
-                  <Droplets className="w-14 h-14 mx-auto" />
-                </div>
-                <h3 className="text-2xl font-bold text-green-900 mb-3">Sustainable</h3>
-                <p className="text-gray-600 text-sm">Balancing development needs with environmental conservation.</p>
+              <div className="flex items-center gap-2 p-3">
+                <d.icon className="h-4 w-4 shrink-0 text-sky-700" />
+                <span className="text-sm font-semibold text-slate-800">{d.title}</span>
               </div>
-              <div className="p-8 bg-purple-50 rounded-2xl border border-purple-100">
-                <div className="text-purple-600 mb-6">
-                  <Activity className="w-14 h-14 mx-auto" />
-                </div>
-                <h3 className="text-2xl font-bold text-purple-900 mb-3">Integrated</h3>
-                <p className="text-gray-600 text-sm">Coordinated approach across departments and stakeholders.</p>
-              </div>
-            </div>
-          </div>
+            </Link>
+          ))}
         </div>
       </section>
     </div>
   );
-};
-
-export default HomePage;
+}
