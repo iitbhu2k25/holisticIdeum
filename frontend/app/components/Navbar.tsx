@@ -29,7 +29,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Home', href: '/homepage' },
-  { label: 'Ideum', href: '/split' },
   {
     label: 'About',
     submenu: [

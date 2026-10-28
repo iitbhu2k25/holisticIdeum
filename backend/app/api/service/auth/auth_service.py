@@ -70,12 +70,16 @@ class Auth_service:
             "user": user_out(user),
         }
 
-    def login(db: Session, email: str, password: str) -> dict:
+    def login(db: Session, email: str, password: str, portal: str = "user") -> dict:
         user = db.query(User).filter(User.email == email.strip().lower()).first()
         if user is None or not verify_password(password, user.hashed_password):
             raise JsonError(401, detail="Email or password is incorrect")
         if not user.is_active:
             raise JsonError(403, detail="This account is disabled")
+        if portal == "admin" and not user.is_superuser:
+            raise JsonError(403, detail="This page is for administrators only. Use Sign in in the menu bar.")
+        if portal == "user" and user.is_superuser:
+            raise JsonError(403, detail="Administrator accounts sign in from the Admin link in the footer.")
         user.last_login = datetime.now()
         db.commit()
         return Auth_service.tokens(user)

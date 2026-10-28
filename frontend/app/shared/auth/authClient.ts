@@ -62,11 +62,12 @@ export async function errorMessage(res: Response, fallback: string): Promise<str
   return (data && (data.detail || data.error)) || `${fallback} (${res.status})`;
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
+/** portal "admin" is the superuser page (/admin/login); "user" is everyone else. The backend refuses a mismatch. */
+export async function login(email: string, password: string, portal: "user" | "admin" = "user"): Promise<AuthUser> {
   const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, portal }),
   });
   if (!res.ok) throw new Error(await errorMessage(res, "Login failed"));
   const data = await res.json();
@@ -76,7 +77,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 
 export function logout(redirect = true) {
   write(null);
-  if (redirect) window.location.replace("/login");
+  if (redirect) window.location.replace("/homepage");
 }
 
 let refreshing: Promise<boolean> | null = null;

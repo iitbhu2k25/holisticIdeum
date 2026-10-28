@@ -44,7 +44,9 @@ export default function Footer() {
                 { label: 'About Holistic', href: '/about/overview' },
                 { label: 'Groundwater', href: '/nirmal-ganga/river-water-quality' },
                 { label: 'MAR Zones', href: '/nirmal-ganga/river-stretches-information' },
-                { label: 'TEM Data', href: '/aviral-ganga/river-discharge-assessment' }
+                { label: 'TEM Data', href: '/aviral-ganga/river-discharge-assessment' },
+                // superuser data upload; signs in at /admin/login first
+                { label: 'Admin (data upload)', href: '/admin/datasets' }
               ].map((link, i) => (
                 <li key={i}>
                   <Link href={link.href} className="flex items-center gap-2 text-sm text-blue-100/80 hover:text-white group transition-colors">

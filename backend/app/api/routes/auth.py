@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.post("/login")
 def login(db: db_dependency, payload: LoginRequest):
-    return Auth_service.login(db, payload.email, payload.password)
+    return Auth_service.login(db, payload.email, payload.password, payload.portal)
 
 @router.post("/refresh")
 def refresh(db: db_dependency, payload: RefreshRequest):

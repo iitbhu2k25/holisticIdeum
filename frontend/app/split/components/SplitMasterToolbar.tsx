@@ -4,7 +4,7 @@ import { ReactNode, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
-  CheckCircle2, CloudOff, Expand, Home, Layers, Loader2, LogIn, LogOut, Pentagon, Plus, Save, ScanSearch, Square, Trash2,
+  CheckCircle2, CloudOff, Expand, Home, Layers, Loader2, LogOut, Pentagon, Plus, Save, ScanSearch, Square, Trash2,
 } from "lucide-react";
 import SessionHistory from "../../shared/components/SessionHistory";
 import { useAuth } from "../../shared/auth/useAuth";
@@ -96,8 +96,8 @@ export default function SplitMasterToolbar({
           <Square className="h-3.5 w-3.5" />
         </ToolButton>
         <ToolButton title="Clear drawing" disabled={!hasDrawing} onClick={onClearDrawing}><Trash2 className="h-3.5 w-3.5" /></ToolButton>
-        <Divider />
-
+        {/* no sign-in button here: Save asks an anonymous user to sign in */}
+        {user ? <Divider /> : null}
         {user ? (
           <ToolButton title={`Sign out ${user.email}`} onClick={() => logout(false)}>
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
@@ -105,9 +105,7 @@ export default function SplitMasterToolbar({
             </span>
             <LogOut className="h-3.5 w-3.5" />
           </ToolButton>
-        ) : (
-          <Link href="/login?next=/split" title="Sign in" className={`${BTN} ${IDLE}`}><LogIn className="h-3.5 w-3.5" />Sign in</Link>
-        )}
+        ) : null}
       </div>
 
       {layersOpen && anchor ? createPortal(
