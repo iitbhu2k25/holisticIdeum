@@ -13,6 +13,7 @@ import { Style, Fill, Stroke, Circle as CircleStyle, Text } from 'ol/style';
 import { Point } from 'ol/geom';
 import { Feature } from 'ol';
 import { fromLonLat, toLonLat } from 'ol/proj';
+import { BACKEND_URL } from '@/app/shared/config';
 import { defaults as defaultControls, ScaleLine } from 'ol/control';
 import { Select } from 'ol/interaction';
 import { click } from 'ol/events/condition';
@@ -68,7 +69,7 @@ const VarunaMap: React.FC<VarunaMapProps> = ({ sidebarCollapsed, showNotificatio
   const selectInteractionRef = useRef<Select | null>(null);
 
   // API base URL
-  const API_BASE = 'http://localhost:9000';
+  const API_BASE = BACKEND_URL;
 
   // River Color Scheme
   const RIVER_COLORS = {

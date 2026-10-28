@@ -1,7 +1,9 @@
 // Create this file: src/services/api.js
 // This will handle all API calls to your Django backend
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+import tunnel from '../../tunnel.json';
+
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL || tunnel.API_URL || 'http://localhost:9000'}/api`;
 
 class RiverMonitoringAPI {
   

@@ -4,8 +4,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import type { FeatureCollection } from "../types";
+import { GEOSERVER_URL } from "../config";
 
-const GEOSERVER_WFS = "http://localhost:9090/geoserver/dss_vector/ows";
+const GEOSERVER_WFS = `${GEOSERVER_URL}/dss_vector/ows`;
 
 export const DRAIN_CONFIGS = [
   { key: "stp",      typeName: "dss_vector:stp",                  color: "#2563eb", label: "STP (Sewage Treatment Plant)" },

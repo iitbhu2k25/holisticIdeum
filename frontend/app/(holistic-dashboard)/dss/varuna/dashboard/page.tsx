@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePathname } from 'next/navigation'; // ✅ Ensure this is available with App Router
 import VarunaMap from './varunamap'; // ✅ Import VarunaMap
+import { BACKEND_URL } from '@/app/shared/config';
 // Interfaces
 interface Alert {
   type: string;
@@ -318,7 +319,7 @@ export default function VarunaRiverDashboard() {
   };
   // Fetch drain data
   useEffect(() => {
-    fetch('http://localhost:9000/api/drain-water-quality/')
+    fetch(`${BACKEND_URL}/api/drain-water-quality/`)
       .then(async res => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();

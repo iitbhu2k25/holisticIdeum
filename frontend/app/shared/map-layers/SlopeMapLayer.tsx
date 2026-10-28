@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMap } from "react-leaflet";
 import type { FeatureCollection } from "../types";
+import { GEOSERVER_URL } from "../config";
 
-const GEOSERVER_WMS = "http://localhost:9090/geoserver/dss_raster/wms";
+const GEOSERVER_WMS = `${GEOSERVER_URL}/dss_raster/wms`;
 const SLOPE_LAYER = "dss_raster:slope_Slope_aviral";
 
 function getZoneName(f: any): string {

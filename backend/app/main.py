@@ -58,8 +58,13 @@ instrumentator.expose(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://172.168.32.60:3000",Settings().DOMAIN],
-    allow_origin_regex=r"^https://.*\.trycloudflare\.com$",
+    allow_origins=[
+        "http://localhost:3000",
+        "http://172.168.32.60:3000",
+        "https://holistic-ideum.vercel.app",
+        Settings().DOMAIN,
+    ],
+    allow_origin_regex=r"^https://(.*\.trycloudflare\.com|.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

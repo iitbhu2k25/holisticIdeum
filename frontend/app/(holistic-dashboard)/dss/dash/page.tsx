@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { BACKEND_URL } from '@/app/shared/config';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadialBarChart, RadialBar, AreaChart, Area } from 'recharts';
 import { MapPin, Droplets, CheckCircle, Clock, AlertCircle, FileText, TrendingUp, Activity, Calendar, Target, Eye, Edit3, Save, X, ChevronDown, ChevronUp, Filter, Download, Search, Zap, CalendarDays, Timer, AlertTriangle, Lock, Unlock, Building, CreditCard, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -115,7 +116,7 @@ interface AllStatusCounts {
 
 const EnhancedRiverDashboard = () => {
   // ⚙️ CHANGE THIS TO MATCH YOUR DJANGO SERVER PORT
-  const API_BASE_URL = 'http://localhost:9000/api';
+  const API_BASE_URL = `${BACKEND_URL}/api`;
 
   // State management
   const [rivers, setRivers] = useState<River[]>([]);

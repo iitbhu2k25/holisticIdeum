@@ -78,7 +78,7 @@ services:
     environment:
       ENABLE_CORS: "true"
       CORS_ENABLED: "true"
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://*.slcrdss.in,https://*.slcrdss.xyz,https://*.trycloudflare.com
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://*.slcrdss.in,https://*.slcrdss.xyz,https://*.trycloudflare.com,https://holistic-ideum.vercel.app,https://*.vercel.app
       CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,HEAD,OPTIONS
       CORS_ALLOWED_HEADERS: "*"
       TOMCAT_EXTRAS: "true"

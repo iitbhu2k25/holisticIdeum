@@ -1,4 +1,5 @@
 // utils/auth.ts
+import { BACKEND_URL } from '@/app/shared/config';
 
 // Helper function to set cookies
 export function setCookie(name: string, value: string, days: number = 7) {
@@ -71,7 +72,7 @@ export async function logout(redirectToLogin: boolean = true) {
     // Call server logout endpoint if available
     const token = getAuthToken();
     if (token) {
-      await fetch('http://localhost:9000/api/auth/logout/', {
+      await fetch(`${BACKEND_URL}/api/auth/logout/`, {
         method: 'POST',
         credentials: 'include',
         headers: {

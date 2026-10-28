@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { BACKEND_URL } from '@/app/shared/config';
 
 interface LoginFormData {
   username: string;
@@ -65,7 +66,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     console.log('🚀 STARTING LOGIN PROCESS');
 
     try {
-      const response = await fetch('http://localhost:9000/api/auth/login/', {
+      const response = await fetch(`${BACKEND_URL}/api/auth/login/`, {
         method: 'POST',
         credentials: 'include',
         headers: {

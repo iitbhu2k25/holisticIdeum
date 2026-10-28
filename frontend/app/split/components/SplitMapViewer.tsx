@@ -15,6 +15,7 @@ import FlowDirectionRasterLayer from "../../shared/map-layers/FlowDirectionRaste
 import NirmalGwqLayer from "../../shared/map-layers/NirmalGwqLayer";
 import NirmalRwqLayer from "../../shared/map-layers/NirmalRwqLayer";
 import StpPointLayer from "../../shared/map-layers/StpPointLayer";
+import { GEOSERVER_URL } from "../../shared/config";
 
 function AviralRasterLayer({ tiff }: { tiff: ArrayBuffer | null }) {
   const map = useMap();
@@ -62,7 +63,7 @@ function AviralRasterLayer({ tiff }: { tiff: ArrayBuffer | null }) {
   return null;
 }
 
-const GEOSERVER_WMS = "http://localhost:9090/geoserver/dss_raster/wms";
+const GEOSERVER_WMS = `${GEOSERVER_URL}/dss_raster/wms`;
 
 /* Rainfall raster — fetches most-recent year automatically */
 function ViewerRainfallLayer({ enabled, selectedZones, clipApiBase }: { enabled: boolean; selectedZones: string[]; clipApiBase: string }) {
