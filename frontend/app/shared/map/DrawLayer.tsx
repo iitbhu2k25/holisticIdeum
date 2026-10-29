@@ -7,8 +7,9 @@ import { useMap } from "react-leaflet";
 export type DrawMode = "polygon" | "rectangle" | null;
 export type DrawnShape = GeoJSON.Feature<GeoJSON.Polygon>;
 
-const SHAPE_STYLE: L.PathOptions = { color: "#ea580c", weight: 2.5, dashArray: "6 4", fillColor: "#fb923c", fillOpacity: 0.12 };
-const SKETCH_STYLE: L.PathOptions = { ...SHAPE_STYLE, dashArray: "2 6", fillOpacity: 0.06 };
+// Outline only — the drawn area stays hollow so the map underneath is fully visible.
+const SHAPE_STYLE: L.PathOptions = { color: "#ea580c", weight: 2.5, dashArray: "6 4", fill: false };
+const SKETCH_STYLE: L.PathOptions = { ...SHAPE_STYLE, dashArray: "2 6" };
 
 function toFeature(latlngs: L.LatLng[]): DrawnShape {
   const ring = latlngs.map((p) => [Number(p.lng.toFixed(6)), Number(p.lat.toFixed(6))]);
