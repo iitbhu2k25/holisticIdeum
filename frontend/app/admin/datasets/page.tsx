@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   AlertTriangle, CheckCircle2, CloudUpload, FileUp, Loader2, RefreshCw, RotateCcw, Trash2, XCircle,
 } from "lucide-react";
@@ -162,7 +161,6 @@ export default function DatasetAdminPage() {
         </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-slate-500">{user?.email}</span>
-          <Link href="/holistic" className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">Open Holistic</Link>
         </div>
       </div>
 

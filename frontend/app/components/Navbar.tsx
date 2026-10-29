@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 import UserMenu from './UserMenu';
+import { useAuth } from '../shared/auth/useAuth';
 
 // ============================================================================
 // TYPES
@@ -103,6 +104,12 @@ export default function ResponsiveNavbar() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   useEffect(() => setIsClient(true), []);
+
+  // Analysis modules are for normal users; the data uploader (superuser) doesn't see them.
+  const { user } = useAuth();
+  const visibleNavItems = user?.role === 'superuser'
+    ? navItems.filter((item) => item.href !== '/holistic')
+    : navItems;
 
   useEffect(() => {
     const handleClickOutside = () => setOpenDropdown(null);
@@ -257,14 +264,14 @@ export default function ResponsiveNavbar() {
           {/* Mobile Menu */}
           <div className="lg:hidden w-full mt-3">
             <div className="flex flex-col border-t border-orange-200 pt-3">
-              {navItems.map((item, idx) => renderMobileNavItem(item, idx))}
+              {visibleNavItems.map((item, idx) => renderMobileNavItem(item, idx))}
               <div className="px-5 py-4"><UserMenu onNavigate={() => setMenuOpen(false)} /></div>
             </div>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden lg:flex lg:items-center lg:justify-between lg:flex-wrap w-full gap-1">
-            {navItems.map((item, idx) => renderDesktopNavItem(item, idx))}
+            {visibleNavItems.map((item, idx) => renderDesktopNavItem(item, idx))}
             <UserMenu />
           </div>
 

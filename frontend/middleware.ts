@@ -6,6 +6,9 @@ import type { NextRequest } from 'next/server'
 // The cookie only steers navigation — the backend checks the token.
 const SUPERUSER_ONLY = ['/admin']
 const ADMIN_LOGIN = '/admin/login'
+// Analysis modules are for normal users; a signed-in superuser only gets the data-upload section.
+const USER_MODULES = ['/holistic', '/split', '/dss/holistic', '/dss/holistic_module']
+const ADMIN_HOME = '/admin/datasets'
 
 const matches = (path: string, prefixes: string[]) =>
   prefixes.some((p) => path === p || path.startsWith(`${p}/`))
@@ -18,7 +21,15 @@ export function middleware(request: NextRequest) {
   if (pathname === ADMIN_LOGIN) {
     if (role !== 'superuser') return NextResponse.next()
     const url = request.nextUrl.clone()
-    url.pathname = '/admin/datasets'
+    url.pathname = ADMIN_HOME
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
+  // "/" redirects to /split, so it counts as a module too
+  if (role === 'superuser' && (pathname === '/' || matches(pathname, USER_MODULES))) {
+    const url = request.nextUrl.clone()
+    url.pathname = ADMIN_HOME
     url.search = ''
     return NextResponse.redirect(url)
   }
