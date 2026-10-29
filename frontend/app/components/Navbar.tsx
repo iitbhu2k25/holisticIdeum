@@ -22,6 +22,7 @@ interface NavItem {
   href?: string;
   external?: boolean;
   submenu?: SubMenuItem[];
+  tooltip?: { title: string; description: string };
 }
 
 // ============================================================================
@@ -88,7 +89,15 @@ const navItems: NavItem[] = [
   },
   { label: 'Holistic Module', href: '/holistic' },
 
-  // { label: 'Dashboard', href: '/dashboard' },
+  {
+    label: 'Dashboard',
+    href: '/dashboard',
+    tooltip: {
+      title: 'Varuna & Assi Comprehensive River Monitoring Dashboard',
+      description:
+        'A single view of the Varuna and Assi rivers: water quality, discharge, sewage load, STP status and ecological indicators, brought together for monitoring and decision-making.'
+    }
+  },
   { label: 'Contact us', href: '/contact' },
 ];
 
@@ -177,6 +186,13 @@ export default function ResponsiveNavbar() {
             </Link>
           )}
         </span>
+
+        {item.tooltip && (
+          <div className="absolute top-full right-0 mt-1 bg-white shadow-xl rounded-lg p-4 w-72 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-orange-100 pointer-events-none">
+            <p className="text-sm font-semibold text-orange-900 mb-1">{item.tooltip.title}</p>
+            <p className="text-xs text-gray-600 leading-relaxed">{item.tooltip.description}</p>
+          </div>
+        )}
       </div>
     );
   };
