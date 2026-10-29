@@ -15,7 +15,7 @@ from rasterio.io import MemoryFile
 from rasterio.mask import mask
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.api.exception.exceptions import JsonError
@@ -250,11 +250,16 @@ class Dataset_service:
 
     def mark_interrupted(db: Session) -> int:
         """Called at startup: anything still 'processing' lost its worker when the server stopped."""
-        count = (
-            db.query(Dataset)
-            .filter(Dataset.status == STATUS_PROCESSING)
-            .update({"status": STATUS_FAILED, "error": "Processing was interrupted by a server restart; retry it"})
-        )
+        try:
+            count = (
+                db.query(Dataset)
+                .filter(Dataset.status == STATUS_PROCESSING)
+                .update({"status": STATUS_FAILED, "error": "Processing was interrupted by a server restart; retry it"})
+            )
+        except ProgrammingError:
+            # fresh database: tables come from start.sh (alembic), which may not have run yet
+            db.rollback()
+            return 0
         db.commit()
         return count
 

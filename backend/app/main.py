@@ -12,7 +12,6 @@ from app.conf.redis.redis_conf import close_redis
 from app.conf.settings import Settings
 from app.database.config.dependency import celery_session
 from app.api.service.datasets.dataset_service import Dataset_service
-from app.api.service.auth.user_sync import sync_users_from_csv
 
 
 from app.conf.logging import logger
@@ -26,15 +25,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Redis listener ready for websockets")
 
+    # migrations and logins are run by start.sh, not on startup
     with celery_session() as db:
         interrupted = Dataset_service.mark_interrupted(db)
-        users = sync_users_from_csv(db)
-    if users.get("missing"):
-        logger.info("No %s; add logins there or with script/create_user.py", users["file"])
-    else:
-        logger.info("Users from CSV: created %s, updated %s", users["created"], users["updated"])
-        for err in users["errors"]:
-            logger.warning("users.csv %s", err)
     if interrupted:
         logger.warning("Marked %s interrupted dataset uploads as failed", interrupted)
     

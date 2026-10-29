@@ -2,6 +2,7 @@
 Add or update a login. There is no registration page; accounts are created here.
 
 Inside the backend container:
+    docker compose exec backend python script/create_user.py     (no options: same as --sync-csv)
     docker compose exec backend python script/create_user.py --email admin@example.com --role superuser
     docker compose exec backend python script/create_user.py --email user@example.com --name "Field User"
 
@@ -10,7 +11,7 @@ existing email updates the password / role / name.
 
 Other actions:
     --sync-csv                  add/update every account in media/user/users.csv
-                                (also done automatically when the backend starts)
+                                (run by start.sh; not done when the backend starts)
     --list                      show all accounts
     --disable / --enable        block or re-allow login for --email
 """
@@ -42,7 +43,8 @@ def main():
 
     db = SessionLocal()
     try:
-        if args.sync_csv:
+        # no options at all: load the accounts from users.csv
+        if args.sync_csv or len(sys.argv) == 1:
             result = sync_users_from_csv(db)
             if result.get("missing"):
                 sys.exit(f"{result['file']} not found")
