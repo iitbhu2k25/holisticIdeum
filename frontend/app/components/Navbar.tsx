@@ -114,11 +114,9 @@ export default function ResponsiveNavbar() {
 
   useEffect(() => setIsClient(true), []);
 
-  // Analysis modules are for normal users; the data uploader (superuser) doesn't see them.
+  // The data uploader (superuser) only has the upload page, so no sections are shown.
   const { user } = useAuth();
-  const visibleNavItems = user?.role === 'superuser'
-    ? navItems.filter((item) => item.href !== '/holistic')
-    : navItems;
+  const visibleNavItems = user?.role === 'superuser' ? [] : navItems;
 
   useEffect(() => {
     const handleClickOutside = () => setOpenDropdown(null);

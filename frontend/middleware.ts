@@ -6,9 +6,10 @@ import type { NextRequest } from 'next/server'
 // The cookie only steers navigation — the backend checks the token.
 const SUPERUSER_ONLY = ['/admin']
 const ADMIN_LOGIN = '/admin/login'
-// Analysis modules are for normal users; a signed-in superuser only gets the data-upload section.
-const USER_MODULES = ['/holistic', '/split', '/dss/holistic', '/dss/holistic_module']
+// A signed-in superuser only gets the data-upload section; every other page sends them there.
 const ADMIN_HOME = '/admin/datasets'
+// static files from /public (images etc.) stay reachable so the upload page still renders
+const STATIC_FILE = /\.[a-z0-9]+$/i
 
 const matches = (path: string, prefixes: string[]) =>
   prefixes.some((p) => path === p || path.startsWith(`${p}/`))
@@ -26,8 +27,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // "/" redirects to /split, so it counts as a module too
-  if (role === 'superuser' && (pathname === '/' || matches(pathname, USER_MODULES))) {
+  if (role === 'superuser' && !matches(pathname, SUPERUSER_ONLY) && !STATIC_FILE.test(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = ADMIN_HOME
     url.search = ''

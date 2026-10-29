@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import TopHeader from './components/tophead';
 import ClientWrapper from './components/ClientWrapper';
+import HideForSuperuser from './components/HideForSuperuser';
 
 interface RootLayoutProps {
   children: ReactNode;
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           </ClientWrapper>
         </main>
         <div id="app-footer">
-          <Footer />
+          <HideForSuperuser>
+            <Footer />
+          </HideForSuperuser>
         </div>
       </body>
     </html>
