@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Loader2, Lock, Mail, ShieldCheck, Waves } from "lucide-react";
 import { login } from "./authClient";
 
@@ -14,7 +14,6 @@ type Props = {
 };
 
 function SignInForm({ portal, title, subtitle, defaultNext, note }: Props) {
-  const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +28,10 @@ function SignInForm({ portal, title, subtitle, defaultNext, note }: Props) {
       await login(email, password, portal);
       const next = params.get("next");
       const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
-      router.replace(safeNext ?? defaultNext);
+      // Full page load, not router.replace: in production builds Next prefetches /admin links
+      // while signed out and caches the middleware redirect to this page, so a client-side
+      // navigation would bounce straight back here and leave the button spinning.
+      window.location.replace(safeNext ?? defaultNext);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setBusy(false);
