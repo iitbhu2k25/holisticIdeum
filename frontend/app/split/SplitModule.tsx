@@ -767,8 +767,8 @@ export default function SplitModule() {
           setVisibleDatasetIds([]);
           setActiveModule(mod);
           setActiveCombinedMeta(null);
-          // Clicking a module opens all 5 viewer screens by default
-          handleSetAllScreens(true);
+          // Clicking a module opens only Screen 5 (bottom / main screen)
+          setVisibleScreens({ top: false, topSecondary: false, left: false, right: false, bottom: true });
         }}
         onResetAllSTP={handleResetAllSTP}
         onActiveCombinedMetaChange={setActiveCombinedMeta}

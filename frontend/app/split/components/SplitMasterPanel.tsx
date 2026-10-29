@@ -123,8 +123,20 @@ export default function SplitMasterPanel({
 }: SplitMasterPanelProps) {
   const [showScreensDropdown, setShowScreensDropdown] = useState(false);
   const [showViewerSize, setShowViewerSize] = useState(false);
-  const [showBasemapOptions, setShowBasemapOptions] = useState(true);
   const [showZoneDropdown, setShowZoneDropdown] = useState(false);
+  // Right column is absolutely positioned; track its height so the panel body
+  // grows to fit it instead of clipping modules/criteria.
+  const rightColRef = useRef<HTMLDivElement>(null);
+  const [rightColHeight, setRightColHeight] = useState(0);
+  useEffect(() => {
+    const el = rightColRef.current;
+    if (!el) return;
+    const update = () => setRightColHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [collapsed]);
   const zoneDropdownRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarOffset, setToolbarOffset] = useState(2);
@@ -510,7 +522,7 @@ export default function SplitMasterPanel({
         ) : null}
 
         {/* Right column — Zone selector + Modules + Criteria, absolutely positioned (below the toolbar row) */}
-        <div className="absolute right-4 flex flex-col items-end gap-2" style={{ top: toolbarOffset, maxWidth: activeModule === "Aviral Ganga" ? 260 : activeModule === "Nirmal Ganga" ? 260 : activeModule === "Jan Ganga" ? 260 : activeModule === "Arth Ganga" ? 260 : activeModule === "Gyan Ganga" ? 260 : activeModule === "Jeevant Ganga" ? 260 : activeModule === "STP Suitability" ? 160 : 140 }}>
+        <div ref={rightColRef} className="absolute right-4 flex flex-col items-end gap-2" style={{ top: toolbarOffset, maxWidth: activeModule === "Aviral Ganga" ? 260 : activeModule === "Nirmal Ganga" ? 260 : activeModule === "Jan Ganga" ? 260 : activeModule === "Arth Ganga" ? 260 : activeModule === "Gyan Ganga" ? 260 : activeModule === "Jeevant Ganga" ? 260 : activeModule === "STP Suitability" ? 160 : 140 }}>
 
           {/* ── Zone selector ── */}
           <div className="w-full" ref={zoneDropdownRef}>
@@ -954,7 +966,7 @@ export default function SplitMasterPanel({
         </div>
 
         {/* Left content — padded right to stay clear of the absolute right column */}
-        <div style={{ paddingRight: activeModule === "Aviral Ganga" ? 270 : activeModule === "Nirmal Ganga" ? 270 : activeModule === "Jan Ganga" ? 270 : activeModule === "Arth Ganga" ? 270 : activeModule === "Gyan Ganga" ? 270 : activeModule === "Jeevant Ganga" ? 270 : activeModule === "STP Suitability" ? 170 : 150 }}>
+        <div style={{ minHeight: rightColHeight, paddingRight: activeModule === "Aviral Ganga" ? 270 : activeModule === "Nirmal Ganga" ? 270 : activeModule === "Jan Ganga" ? 270 : activeModule === "Arth Ganga" ? 270 : activeModule === "Gyan Ganga" ? 270 : activeModule === "Jeevant Ganga" ? 270 : activeModule === "STP Suitability" ? 170 : 150 }}>
 
         {/* Row 1: Screens — single toggle + expand */}
         {(() => {
@@ -1025,35 +1037,20 @@ export default function SplitMasterPanel({
         })()}
 
         {/* Row 2a: Basemap — own row so height doesn't inflate due to modules */}
-        <div className="mb-2">
-          <div className="mb-1.5 flex items-center gap-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-400/70">Basemap</p>
-            <button
-              type="button"
-              onClick={() => setShowBasemapOptions((prev) => !prev)}
-              className="rounded-md bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white/20"
-            >
-              {showBasemapOptions ? "Hide" : "Show"}
-            </button>
-          </div>
-          {showBasemapOptions ? (
-            <div className="flex gap-1">
-              {basemapOptions.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => onBasemapChange(opt.key)}
-                  className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-all duration-200 ${
-                    basemap === opt.key
-                      ? "bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40"
-                      : "bg-white/5 text-slate-400 ring-1 ring-white/5 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+        <div className="mb-2 flex items-center gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-400/70">Basemap</p>
+          <select
+            value={basemap}
+            onChange={(e) => onBasemapChange(e.target.value as BasemapType)}
+            title="Change basemap"
+            className="rounded-md bg-white/10 px-2 py-1 text-[10px] font-semibold text-white ring-1 ring-blue-400/30 hover:bg-white/20 focus:outline-none"
+          >
+            {basemapOptions.map((opt) => (
+              <option key={opt.key} value={opt.key} className="bg-slate-900 text-white">
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
 
